@@ -1,0 +1,140 @@
+/* Chatworkスタイルのカスタマイズ */
+:root {
+  --chatwork-primary: #3498db;
+  --chatwork-primary-dark: #2980b9;
+  --chatwork-sidebar: #2c3e50;
+  --chatwork-success: #2ecc71;
+  --chatwork-text: #34495e;
+  --chatwork-border: #ddd;
+  --chatwork-hover: rgba(255, 255, 255, 0.1);
+}
+
+body {
+  color: var(--chatwork-text);
+}
+
+.hover-overlay:hover {
+  background-color: var(--chatwork-hover);
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.bg-chatwork {
+  background-color: var(--chatwork-sidebar) !important;
+}
+
+.bg-chatwork-primary {
+  background-color: var(--chatwork-primary) !important;
+}
+
+.btn-chatwork {
+  background-color: var(--chatwork-primary);
+  border-color: var(--chatwork-primary);
+  color: white;
+}
+
+.btn-chatwork:hover {
+  background-color: var(--chatwork-primary-dark);
+  border-color: var(--chatwork-primary-dark);
+  color: white;
+}
+
+.text-chatwork-success {
+  color: var(--chatwork-success) !important;
+}
+
+/* メッセージ入力エリア */
+.chat-input {
+  border-radius: 4px;
+  border: 1px solid var(--chatwork-border);
+  resize: none;
+}
+
+.chat-input:focus {
+  border-color: var(--chatwork-primary);
+  box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+}
+
+/* メッセージスタイル */
+.message-bubble {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.message-time {
+  font-size: 0.75rem;
+  color: #95a5a6;
+}
+
+/* サイドバースタイル */
+.sidebar-section {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-item {
+  transition: background-color 0.2s ease;
+  border-radius: 4px;
+}
+
+.sidebar-item:hover {
+  background-color: var(--chatwork-hover);
+}
+
+.sidebar-item.active {
+  background-color: var(--chatwork-primary);
+}
+
+/* アバタースタイル */
+.avatar {
+  width: 40px;
+  height: 40px;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* ツールバーボタン */
+.toolbar-btn {
+  padding: 6px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.toolbar-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* スクロールバーカスタマイズ */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #bdc3c7;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #95a5a6;
+}
+
+/* モーダル関連 */
+.modal-backdrop {
+  display: none;
+}
+
+.modal.show {
+  display: block;
+}
+
+.modal-content {
+  border-radius: 8px;
+  border: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
