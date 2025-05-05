@@ -28,7 +28,7 @@ return [
     'username' => 'user_id',
 
     // Fortify 側でメールアドレスを扱わないので不要ならそのまま残してもOKです。
-    'email' => 'user_id',
+  //  'email' => 'user_id',
 
     /*
     |--------------------------------------------------------------------------
@@ -49,7 +49,7 @@ return [
     | Fortify Routes Prefix / Subdomain
     |--------------------------------------------------------------------------
     */
-    'prefix' => '',
+    'prefix' => '/api',
 
     'domain' => null,
 
@@ -58,7 +58,7 @@ return [
     | Fortify Routes Middleware
     |--------------------------------------------------------------------------
     */
-    'middleware' => ['web'],
+    'middleware' => ['api'],
 
     /*
     |--------------------------------------------------------------------------
@@ -66,8 +66,8 @@ return [
     |--------------------------------------------------------------------------
     */
     'limiters' => [
-        'login'       => 'login',
-        'two-factor'  => 'two-factor',
+        'login' => 'login',
+      //  'two-factor'  => 'two-factor',
     ],
 
     /*
@@ -89,21 +89,11 @@ return [
     'features' => [
         // ユーザー登録
         Features::registration(),
-
-        // パスワードリセット（メール送信不要ならコメントアウト）
-        // Features::resetPasswords(),
-
-        // プロファイル更新
+        Features::resetPasswords(),
+       // Features::emailVerification(),
         Features::updateProfileInformation(),
-
-        // パスワード変更
         Features::updatePasswords(),
 
-        // 2要素認証（不要ならコメントアウト）
-        // Features::twoFactorAuthentication([
-        //     'confirm' => true,
-        //     'confirmPassword' => true,
-        // ]),
     ],
 
 ];

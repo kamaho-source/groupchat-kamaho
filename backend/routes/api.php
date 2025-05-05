@@ -2,49 +2,40 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
-use App\Http\Controllers\MessageController;
-use App\Http\Controllers\ChannelController;
-use Laravel\Sanctum\Http\Controllers\CsrfCookieController;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use Laravel\Fortify\Http\Controllers\AuthenticatedSessionController;
 use Laravel\Fortify\Http\Controllers\RegisteredUserController;
+use App\Http\Controllers\ChannelController;
+use App\Http\Controllers\MessageController;
 
-Route::middleware('api')->group(function () {
-    // -------------------------------------------------
-    // CSRF Cookie（Sanctum）
-    // -------------------------------------------------
-    Route::get('/sanctum/csrf-cookie', [CsrfCookieController::class, 'show']);
+/*
+|--------------------------------------------------------------------------
+| SPA 認証後 API ルート (api ミドルウェア上で動作)
+|--------------------------------------------------------------------------
+*/
+Route::middleware([
+    EnsureFrontendRequestsAreStateful::class,
+    'auth:sanctum',
+])->group(function () {
+    // 認証済みユーザー情報取得
+    Route::get('user', function (Request $request) {
+        return response()->json($request->user());
+    });
 
-    // -------------------------------------------------
-    // チャンネル・メッセージ API
-    // -------------------------------------------------
+    // チャンネル／メッセージ
     Route::apiResource('channels', ChannelController::class);
     Route::get('channels/{channel}/messages', [MessageController::class, 'index']);
     Route::post('channels/{channel}/messages', [MessageController::class, 'store']);
     Route::apiResource('messages', MessageController::class);
+});
 
-    // -------------------------------------------------
-    // 認証：ログイン／ログアウト
-    // -------------------------------------------------
-    // Fortify デフォルトのセッションコントローラを使う
-    Route::post('/login',  [AuthenticatedSessionController::class, 'store']);
-    Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
-        ->middleware('auth:sanctum');
-
-    // ログイン済みユーザー情報取得
-    Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-        return $request->user();
-    });
-
-    // -------------------------------------------------
-    // ユーザー登録：POST のみサポート
-    // -------------------------------------------------
-    // Fortify RegisteredUserController を利用
-    Route::post('/register', [RegisteredUserController::class, 'store']);
-
-    // GET での誤アクセスをキャッチして JSON 405 を返す
-    Route::get('/register', function () {
-        return response()->json([
-            'message' => 'このエンドポイントは POST のみ対応しています',
-        ], 405);
-    });
+// ここから「認証前」のエンドポイントを定義
+Route::middleware([
+    EnsureFrontendRequestsAreStateful::class,
+])->group(function () {
+    // API プレフィックスでのログイン／ログアウト
+    Route::post('login',  [AuthenticatedSessionController::class, 'store']);
+    Route::post('logout', [AuthenticatedSessionController::class, 'destroy']);
+    // 必要に応じてユーザー登録
+    Route::post('register', [RegisteredUserController::class, 'store']);
 });
