@@ -1,19 +1,17 @@
 <?php
+// app/Providers/FortifyServiceProvider.php
 
 namespace App\Providers;
 
+use App\Actions\Fortify\LoginResponse as LoginResponseContract;
 use App\Actions\Fortify\CreateNewUser;
-use App\Actions\Fortify\ResetUserPassword;
-use App\Actions\Fortify\UpdateUserPassword;
-use App\Actions\Fortify\UpdateUserProfileInformation;
-use App\Models\User;
-use Illuminate\Cache\RateLimiting\Limit;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Str;
+use Laravel\Fortify\Contracts\LoginResponse;
+use Laravel\Fortify\Contracts\CreatesNewUsers;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cookie;
 use Laravel\Fortify\Fortify;
+use Illuminate\Http\Request;
 
 class FortifyServiceProvider extends ServiceProvider
 {
@@ -22,11 +20,45 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // CreatesNewUsers は CreateNewUser クラスにバインド
-        $this->app->singleton(
-            \Laravel\Fortify\Contracts\CreatesNewUsers::class,
-            CreateNewUser::class
-        );
+        // ログインレスポンスをオーバーライド
+        $this->app->instance(LoginResponse::class, new class extends LoginResponseContract {
+            public function toResponse($request)
+            {
+                $user = Auth::user();
+
+                // セッション Cookie を再発行
+                $sessionId = $request->session()->getId();
+                Cookie::queue(
+                    Cookie::make(
+                        config('session.cookie'),
+                        $sessionId,
+                        config('session.lifetime'),
+                        config('session.path'),
+                        config('session.domain'),
+                        config('session.secure'),
+                        true,
+                        false,
+                        config('session.same_site')
+                    )
+                );
+
+                // Sanctum トークンを発行
+                $plainToken = $user->createToken('api-token')->plainTextToken;
+
+                return response()->json([
+                    'login' => true,
+                    'user'  => [
+                        'id'      => $user->id,
+                        'user_id' => $user->user_id,
+                        'name'    => $user->name,
+                    ],
+                    'token' => $plainToken,
+                ], 200);
+            }
+        });
+
+        // ユーザー作成の契約に実装をバインド
+        $this->app->singleton(CreatesNewUsers::class, CreateNewUser::class);
     }
 
     /**
@@ -34,43 +66,19 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // ユーザー登録や更新系は既存のアクションを利用
-        Fortify::createUsersUsing(CreateNewUser::class);
-        Fortify::updateUserProfileInformationUsing(UpdateUserProfileInformation::class);
-        Fortify::updateUserPasswordsUsing(UpdateUserPassword::class);
-        Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
-
-        // ログインに使うフィールドを 'user_id' に変更
+        // 認証フィールドを user_id に
         Fortify::username('user_id');
+
+        // Fortify の標準ルートを無効化
+        Fortify::ignoreRoutes();
 
         // カスタム認証ロジック
         Fortify::authenticateUsing(function (Request $request) {
-            // 'user_id' を文字列として検証
-            $request->validate([
-                'user_id'  => ['required', 'string'],
-                'password' => ['required', 'string'],
-            ]);
-
-            // user_id カラムでユーザーを検索
-            $user = User::where('user_id', $request->input('user_id'))->first();
-
-            // パスワード照合
-            if ($user && Hash::check($request->input('password'), $user->password)) {
-                return $user;
-            }
-
-            return null;
+            $credentials = $request->only('user_id', 'password');
+            return Auth::attempt($credentials) ? Auth::user() : null;
         });
 
-        // ログイン試行のレートリミット設定
-        RateLimiter::for('login', function (Request $request) {
-            $key = Str::transliterate(Str::lower($request->input('user_id')).'|'.$request->ip());
-            return Limit::perMinute(5)->by($key);
-        });
-
-        // 二段階認証のレートリミット設定
-        RateLimiter::for('two-factor', function (Request $request) {
-            return Limit::perMinute(5)->by($request->session()->get('login.id'));
-        });
+        // ユーザー登録ロジックを指定
+        Fortify::createUsersUsing(CreateNewUser::class);
     }
 }

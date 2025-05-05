@@ -18,7 +18,7 @@ export default function UserCreatePage() {
 
     // マウント時に CSRF Cookie を取得
     useEffect(() => {
-        axios.get('http://localhost:8080/sanctum/csrf-cookie', {
+        axios.get('http://localhost:8000/sanctum/csrf-cookie', {
             withCredentials: true
         }).catch(console.error);
     }, []);
@@ -35,7 +35,7 @@ export default function UserCreatePage() {
         setLoading(true);
         try {
             await axios.post(
-                'http://localhost:8080/api/register',
+                'http://localhost:8000/api/register',
                 {
                     user_id: userId,
                     name,
