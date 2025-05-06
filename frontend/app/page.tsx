@@ -2,13 +2,15 @@
 
 import React, { useState, useRef, useEffect, ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Plus, Send, X, User } from 'lucide-react';
+import { Plus, Send, X, User, Upload } from 'lucide-react';
 import axios from '@/lib/axios';
 
 interface Message {
     id: number;
     user: string;
-    content: string;
+    content?: string;
+    file_url?: string;
+    file_name?: string;
     timestamp: string;
     channelId: number;
 }
@@ -23,27 +25,28 @@ export default function HomePage() {
     const router = useRouter();
     const pathname = usePathname();
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [channels, setChannels] = useState<Channel[]>([]);
     const [messages, setMessages] = useState<Message[]>([]);
     const [currentChannel, setCurrentChannel] = useState<number>(DEFAULT_CHANNEL_ID);
     const [newMessage, setNewMessage] = useState<string>('');
+    const [file, setFile] = useState<File | null>(null);
     const [currentUser, setCurrentUser] = useState<string | null>(null);
     const [isAuthChecked, setIsAuthChecked] = useState(false);
 
-    // URL変換関数
-    const renderContent = (text: string): ReactNode[] => {
-        const urlRegex = /(https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=%]+)/g;
-        return text.split(urlRegex).map((part, index) => {
-            if (urlRegex.test(part)) {
-                return (
-                    <a key={index} href={part} target="_blank" rel="noopener noreferrer">
-                        {part}
-                    </a>
-                );
-            }
-            return <span key={index}>{part}</span>;
-        });
+    // URLリンク化
+    const renderContent = (text: string = ''): ReactNode[] => {
+        const urlRegex = /(https?:\/\/[\w\-._~:\/?#[\]@!$&'()*+,;=%]+)/g;
+        return text.split(urlRegex).map((part, index) =>
+            urlRegex.test(part) ? (
+                <a key={index} href={part} target="_blank" rel="noopener noreferrer">
+                    {part}
+                </a>
+            ) : (
+                <span key={index}>{part}</span>
+            )
+        );
     };
 
     // 認証チェック
@@ -60,6 +63,7 @@ export default function HomePage() {
         })();
     }, []);
 
+    // 未認証時リダイレクト
     useEffect(() => {
         if (isAuthChecked && !currentUser && pathname !== '/login') {
             router.replace('/login');
@@ -102,15 +106,32 @@ export default function HomePage() {
         router.replace('/login');
     };
 
-    const handleSendMessage = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newMessage.trim()) return;
-        await axios.post(`/api/channels/${currentChannel}/messages`, {
-            user: currentUser,
-            content: newMessage,
-        });
+    const sendMessage = async () => {
+        if (!newMessage.trim() && !file) return;
+        const formData = new FormData();
+        formData.append('user', currentUser || '');
+        if (newMessage.trim()) formData.append('content', newMessage);
+        if (file) formData.append('file', file);
+        await axios.post(
+            `/api/channels/${currentChannel}/messages`,
+            formData,
+            { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
         setNewMessage('');
+        setFile(null);
         fetchMessages(currentChannel);
+    };
+
+    const handleSendMessage = (e: React.FormEvent) => {
+        e.preventDefault();
+        sendMessage();
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
     };
 
     const handleAddChannel = async () => {
@@ -121,54 +142,146 @@ export default function HomePage() {
         setCurrentChannel(res.data.id);
     };
 
-    if (!isAuthChecked) return <div className="text-center mt-5">認証チェック中…</div>;
+    if (!isAuthChecked) {
+        return <div className="text-center mt-5">認証チェック中…</div>;
+    }
 
     return (
         <div className="container-fluid vh-100 d-flex p-0">
-            <aside className="col-md-3 col-lg-2 bg-light border-end d-flex flex-column p-3">
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h5>Channels</h5>
-                    <button className="btn btn-sm btn-outline-primary" onClick={handleAddChannel}>
-                        <Plus />
+            {/* モバイル用オフキャンバスボタン */}
+            <button
+                className="btn btn-outline-light position-fixed top-0 start-0 m-3 d-md-none"
+                type="button"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#channelSidebar"
+                aria-controls="channelSidebar"
+            >
+                <Plus />
+            </button>
+
+            {/* オフキャンバスサイドバー（モバイル） */}
+            <div
+                className="offcanvas offcanvas-start bg-dark text-light"
+                tabIndex={-1}
+                id="channelSidebar"
+                aria-labelledby="channelSidebarLabel"
+            >
+                <div className="offcanvas-header">
+                    <h5 id="channelSidebarLabel">鎌倉児童ホーム</h5>
+                    <button
+                        type="button"
+                        className="btn-close btn-close-white"
+                        data-bs-dismiss="offcanvas"
+                        aria-label="Close"
+                    />
+                </div>
+                <div className="offcanvas-body p-0">
+                    <ul className="nav nav-pills flex-column mb-2">
+                        {channels.map(ch => (
+                            <li key={ch.id} className="nav-item mb-1">
+                                <a
+                                    className={`nav-link text-start text-light ${ch.id === currentChannel ? 'active bg-primary' : ''}`}
+                                    style={{ cursor: 'pointer' }}
+                                    onClick={() => setCurrentChannel(ch.id)}
+                                    data-bs-dismiss="offcanvas"
+                                >
+                                    # {ch.name}
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                    <button className="btn btn-sm btn-outline-light mb-2 m-3" onClick={handleAddChannel}>
+                        <Plus className="me-1" /> チャンネル追加
+                    </button>
+                    <button className="btn btn-sm btn-outline-light m-3" onClick={handleLogout}>
+                        <X className="me-1" /> ログアウト
                     </button>
                 </div>
-                <ul className="list-group flex-grow-1 mb-3">
+            </div>
+
+            {/* デスクトップ用サイドバー */}
+            <aside className="col-md-3 col-lg-2 bg-dark text-light border-end d-none d-md-flex flex-column p-3">
+                <h4 className="mb-4">鎌倉児童ホーム</h4>
+                <ul className="nav nav-pills flex-column mb-3">
                     {channels.map(ch => (
-                        <li
-                            key={ch.id}
-                            className={`list-group-item list-group-item-action ${ch.id === currentChannel ? 'active' : ''}`}
-                            onClick={() => setCurrentChannel(ch.id)}
-                            style={{ cursor: 'pointer' }}
-                        >
-                            <User className="me-2" /> {ch.name}
+                        <li key={ch.id} className="nav-item mb-1">
+                            <a
+                                className={`nav-link text-start text-light ${ch.id === currentChannel ? 'active bg-primary' : ''}`}
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => setCurrentChannel(ch.id)}
+                            >
+                                # {ch.name}
+                            </a>
                         </li>
                     ))}
                 </ul>
-                <button className="btn btn-outline-danger mt-auto" onClick={handleLogout}>
-                    <X className="me-1" /> Logout
+                <button className="btn btn-sm btn-outline-light mb-2" onClick={handleAddChannel}>
+                    <Plus className="me-1" /> チャンネル追加
+                </button>
+                <button className="btn btn-sm btn-outline-light mt-auto" onClick={handleLogout}>
+                    <X className="me-1" /> ログアウト
                 </button>
             </aside>
 
+            {/* メインエリア */}
             <main className="col p-0 d-flex flex-column">
-                <div className="flex-grow-1 overflow-auto p-3 bg-white">
+                {/* チャンネルヘッダー */}
+                <div className="border-bottom bg-white p-3 d-flex justify-content-between align-items-center">
+                    <h5 className="mb-0"># {channels.find(c => c.id === currentChannel)?.name}</h5>
+                    <span className="text-secondary">{currentUser}</span>
+                </div>
+
+                {/* メッセージリスト */}
+                <div className="flex-grow-1 overflow-auto bg-light p-3">
                     {messages.map(msg => (
-                        <div key={msg.id} className="mb-3">
-                            <div className="fw-bold">{msg.user}</div>
-                            <div className="border rounded p-2">
-                                {renderContent(msg.content)}
+                        <div key={msg.id} className="d-flex mb-3">
+                            <div className="me-3">
+                                <User className="text-secondary" size={32} />
                             </div>
-                            <small className="text-muted">{msg.timestamp}</small>
+                            <div className="flex-grow-1">
+                                <div className="d-flex align-items-baseline mb-1">
+                                    <strong className="me-2">{msg.user}</strong>
+                                    <small className="text-muted">{msg.timestamp}</small>
+                                </div>
+                                <div className="bg-white rounded p-2 border" style={{ whiteSpace: 'pre-wrap' }}>
+                                    {renderContent(msg.content)}
+                                    {msg.file_url && (
+                                        <div className="mt-2">
+                                            <a href={msg.file_url} download className="d-flex align-items-center">
+                                                <Upload className="me-1" /> {msg.file_name}
+                                            </a>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     ))}
-                    <div ref={messagesEndRef}></div>
+                    <div ref={messagesEndRef} />
                 </div>
-                <form onSubmit={handleSendMessage} className="p-3 border-top bg-light d-flex">
+
+                {/* メッセージ入力 */}
+                <form onSubmit={handleSendMessage} className="p-3 border-top bg-white d-flex align-items-end">
+          <textarea
+              className="form-control me-2"
+              placeholder="メッセージを入力... (Shift+Enter で改行)"
+              value={newMessage}
+              onChange={e => setNewMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={2}
+              style={{ resize: 'none' }}
+          />
+                    <button
+                        className="btn btn-outline-secondary me-2"
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                    >
+                        <Upload />
+                    </button>
                     <input
-                        type="text"
-                        className="form-control me-2"
-                        placeholder="メッセージを入力..."
-                        value={newMessage}
-                        onChange={e => setNewMessage(e.target.value)}
+                        type="file"
+                        ref={fileInputRef}
+                        className="d-none"
+                        onChange={e => e.target.files && setFile(e.target.files[0])}
                     />
                     <button type="submit" className="btn btn-primary">
                         <Send />
