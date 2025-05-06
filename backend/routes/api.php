@@ -27,6 +27,9 @@ Route::middleware([
     Route::get('channels/{channel}/messages', [MessageController::class, 'index']);
     Route::post('channels/{channel}/messages', [MessageController::class, 'store']);
     Route::apiResource('messages', MessageController::class);
+    // メッセージ更新
+    Route::put('channels/{channel}/messages/{message}', [MessageController::class, 'update']);
+
 });
 
 // ここから「認証前」のエンドポイントを定義
