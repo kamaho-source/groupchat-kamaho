@@ -50,38 +50,6 @@ services:
     platform: linux/amd64
 
 
-  groupchat-kamaho-network-reverse:
-    image: nginx:latest
-    ports:
-      - "80:80"
-    volumes:
-      - "./docker/nginx/nginx.conf:/etc/nginx/nginx.conf"
-
-    networks:
-      - groupchat-kamaho-network-reverse
-      - groupchat-kamaho-network-inner
-
-
-  groupchat-kamaho-network-inner:
-    build:
-        context: .
-        dockerfile: ./docker/backend.Dockerfile
-    volumes:
-      - "./backend:/var/www/html"
-      - "./docker/apache/000-default.conf:/etc/apache2/sites-available/000-default.conf"
-
-    networks:
-        - groupchat-kamaho-network-inner
-        - groupchat-kamaho-network-db
-
-
-networks:
-    groupchat-kamaho-network-reverse:
-        internal: false
-    groupchat-kamaho-network-inner:
-        internal: false
-    groupchat-kamaho-network-db:
-        internal: false
 
 
 
