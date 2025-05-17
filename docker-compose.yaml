@@ -21,11 +21,16 @@ services:
       - "3000:3000"
     volumes:
       - ./frontend:/app/
+      - /app/node_modules
+
 
     working_dir: /app
     command: npm run dev
     environment:
       TZ: "Asia/Tokyo"
+      NODE_ENV: development
+
+
     depends_on:
       - groupchat-kamaho-app
 
