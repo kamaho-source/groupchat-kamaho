@@ -15,4 +15,9 @@ class Channel extends Model
     {
         return $this->hasMany(Message::class);
     }
+
+    public function projects()
+    {
+        return $this->hasMany(Project::class);
+    }
 }
