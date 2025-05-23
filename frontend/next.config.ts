@@ -1,6 +1,5 @@
 import { NextConfig } from 'next';
 
-// next.config.ts
 const HOST = 'http://host.docker.internal:8000';
 
 const nextConfig: NextConfig = {
@@ -29,10 +28,20 @@ const nextConfig: NextConfig = {
                 source: '/api/user',
                 destination: `${HOST}/api/user`,
             },
+            // Broadcasting 認証（PresenceChannel / PrivateChannel 用）
+            {
+                source: '/broadcasting/auth',
+                destination: `${HOST}/broadcasting/auth`,
+            },
             // その他の Laravel API
             {
                 source: '/api/:path*',
                 destination: `${HOST}/api/:path*`,
+            },
+            // ファイルストレージへのリライト
+            {
+                source: '/storage/:path*',
+                destination: `${HOST}/storage/:path*`,
             },
         ];
     },

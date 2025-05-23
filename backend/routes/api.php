@@ -1,5 +1,10 @@
 <?php
 
+use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ProjectChatController;
+use App\Http\Controllers\ProjectFileController;
+use App\Http\Controllers\ProjectUserController;
+use App\Http\Controllers\TaskController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
@@ -21,6 +26,10 @@ Route::middleware([
     Route::get('user', function (Request $request) {
         return response()->json($request->user());
     });
+    //現在登録されているユーザーを表示する
+    Route::get('users', function (Request $request) {
+        return response()->json($request->user()->all());
+    });
 
     // チャンネル／メッセージ
     Route::apiResource('channels', ChannelController::class);
@@ -29,6 +38,29 @@ Route::middleware([
     Route::apiResource('messages', MessageController::class);
     // メッセージ更新
     Route::put('channels/{channel}/messages/{message}', [MessageController::class, 'update']);
+    Route::get('projects',         [ProjectController::class, 'index']);
+    // プロジェクト作成（POST） ← ここを追加！
+    Route::post('projects',         [ProjectController::class, 'store']);
+    // プロジェクト詳細（GET）
+    Route::get('projects/{project}', [ProjectController::class, 'show']);
+    // プロジェクト更新（PATCH）
+    Route::patch('projects/{project}', [ProjectController::class, 'update']);
+    // プロジェクト削除（DELETE）
+    Route::delete('projects/{project}', [ProjectController::class, 'destroy']);
+    Route::get('/projects/{project}/users',             [ProjectUserController::class,'index']);
+    Route::post('/projects/{project}/users',             [ProjectUserController::class,'store']);
+    Route::put('/projects/{project}/users/{user}',       [ProjectUserController::class,'update']);
+    Route::delete('/projects/{project}/users/{user}',      [ProjectUserController::class,'destroy']);
+    Route::get('/projects/{project}/files',            [ProjectFileController::class,'index']);
+    Route::post('/projects/{project}/files',            [ProjectFileController::class,'store']);
+    Route::delete('/projects/{project}/files/{file}',     [ProjectFileController::class,'destroy']);
+
+    // タスク
+    Route::apiResource('projects.tasks', TaskController::class);
+
+    // プロジェクトチャット
+    Route::get ('/projects/{project}/chat',      [ProjectChatController::class,'show']);
+    Route::post('/projects/{project}/chat/send', [ProjectChatController::class,'send']);
 
 });
 

@@ -21,17 +21,9 @@ services:
       - "3000:3000"
     volumes:
       - ./frontend:/app/
-      - /app/node_modules
-
-
-    working_dir: /app
-    command: npm run dev
-    environment:
-      TZ: "Asia/Tokyo"
-      NODE_ENV: development
-
 
     depends_on:
+      - groupchat-kamaho-frontend
       - groupchat-kamaho-app
 
   groupchat-kamaho-mysql:
@@ -40,21 +32,14 @@ services:
       context: .
       dockerfile: ./docker/database.Dockerfile
     ports:
-        - "3306:3306"
+      - "3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: kamaho
       MYSQL_USER: kamaho
       MYSQL_PASSWORD: kamaho
       TZ: "Asia/Tokyo"
-
     volumes:
       - ./docker/mysql:/var/lib/mysql
       - ./database/log:/var/log/database
-
     platform: linux/amd64
-
-
-
-
-
