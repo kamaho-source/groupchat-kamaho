@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install gd zip pdo pdo_mysql mysqli xml
 
+RUN docker-php-ext-install bcmath
 # Install Composer \
 COPY --from=composer /usr/bin/composer /usr/bin/composer
 
