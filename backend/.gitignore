@@ -24,3 +24,4 @@ yarn-error.log
 /.zed
 /storage/
 /bootstrap/cache/
+.DS_Store
