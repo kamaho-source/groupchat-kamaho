@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Lock, User as UserIcon } from 'lucide-react';
 import axios from '@/lib/axios';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -11,7 +12,6 @@ export default function LoginPage() {
     const [error, setError]           = useState<string | null>(null);
     const [loading, setLoading]       = useState(false);
 
-    // 初回マウント時に CSRF Cookie を取得
     useEffect(() => {
         axios.get('/sanctum/csrf-cookie').catch(console.error);
     }, []);
@@ -21,9 +21,7 @@ export default function LoginPage() {
         setError(null);
         setLoading(true);
         try {
-            // CSRF トークン再取得
             await axios.get('/sanctum/csrf-cookie');
-            // ログイン
             await axios.post('api/login', { user_id: identifier, password: password });
             router.replace('/');
         } catch (err: any) {
@@ -82,9 +80,14 @@ export default function LoginPage() {
                         />
                     </div>
                 </div>
-                <button type="submit" className="btn btn-primary w-100" disabled={loading}>
-                    {loading ? 'ログイン中…' : 'ログイン'}
-                </button>
+                <div className="d-grid gap-2">
+                    <button type="submit" className="btn btn-primary" disabled={loading}>
+                        {loading ? 'ログイン中…' : 'ログイン'}
+                    </button>
+                    <Link href="/users/new" className="btn btn-outline-secondary">
+                        新規登録
+                    </Link>
+                </div>
             </form>
         </div>
     );

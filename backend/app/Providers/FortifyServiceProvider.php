@@ -12,12 +12,11 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
 use Laravel\Fortify\Fortify;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\ValidationException;
 
 class FortifyServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
         // ログインレスポンスをオーバーライド
@@ -46,7 +45,8 @@ class FortifyServiceProvider extends ServiceProvider
                 $plainToken = $user->createToken('api-token')->plainTextToken;
 
                 return response()->json([
-                    'login' => true,
+                    'success' => true,
+                    'message' => 'ようこそ！ログインできたよ！',
                     'user'  => [
                         'id'      => $user->id,
                         'user_id' => $user->user_id,
@@ -61,9 +61,6 @@ class FortifyServiceProvider extends ServiceProvider
         $this->app->singleton(CreatesNewUsers::class, CreateNewUser::class);
     }
 
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
     {
         // 認証フィールドを user_id に
@@ -75,7 +72,28 @@ class FortifyServiceProvider extends ServiceProvider
         // カスタム認証ロジック
         Fortify::authenticateUsing(function (Request $request) {
             $credentials = $request->only('user_id', 'password');
-            return Auth::attempt($credentials) ? Auth::user() : null;
+
+            // レート制限をチェック
+            if (RateLimiter::tooManyAttempts('login-attempts-'.$request->user_id, 5)) {
+                $seconds = RateLimiter::availableIn('login-attempts-'.$request->user_id);
+                throw ValidationException::withMessages([
+                    'user_id' => [
+                        "たくさん間違えちゃったから、{$seconds}秒待ってからもう一度試してね！"
+                    ],
+                ]);
+            }
+
+            if (Auth::attempt($credentials)) {
+                RateLimiter::clear('login-attempts-'.$request->user_id);
+                return Auth::user();
+            }
+
+            // 失敗回数を記録
+            RateLimiter::hit('login-attempts-'.$request->user_id);
+
+            throw ValidationException::withMessages([
+                'user_id' => ['ログインIDかパスワードが違うよ！もう一度確認してね。'],
+            ]);
         });
 
         // ユーザー登録ロジックを指定
