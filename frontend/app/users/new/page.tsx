@@ -35,7 +35,7 @@ export default function UserCreatePage() {
         setLoading(true);
         try {
             await axios.post(
-                'http://localhost:8000/api/register',
+                '/api/register',
                 {
                     user_id: userId,
                     name,
