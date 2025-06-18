@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { UserPlus, Eye, EyeOff } from 'lucide-react';
-import axios from 'axios';
+import axios from '@/lib/axios';
 import { useRouter } from 'next/navigation';
 
 export default function UserCreatePage() {
@@ -18,7 +18,7 @@ export default function UserCreatePage() {
 
     // マウント時に CSRF Cookie を取得
     useEffect(() => {
-        axios.get('http://localhost:8000/sanctum/csrf-cookie', {
+        axios.get('/sanctum/csrf-cookie', {
             withCredentials: true
         }).catch(console.error);
     }, []);
