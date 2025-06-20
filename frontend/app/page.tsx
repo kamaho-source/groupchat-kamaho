@@ -150,7 +150,6 @@ export default function HomePage() {
         e.preventDefault();
         sendMessage();
     };
-
     // Ctrl+Enter または Command+Enter で投稿、通常 Enter は改行
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if ((e.key === 'Enter' && e.ctrlKey) || (e.key === 'Enter' && e.metaKey)) {
@@ -158,9 +157,23 @@ export default function HomePage() {
             sendMessage();
         } else if (e.key === 'Enter') {
             e.preventDefault();
-            setNewMessage(val => val + '\n');
+            const target = e.target as HTMLTextAreaElement;
+            const start = target.selectionStart ?? 0;
+            const end = target.selectionEnd ?? 0;
+            const newCursorPosition = start + 1;
+
+            setNewMessage(prev => {
+                return prev.substring(0, start) + '\n' + prev.substring(end);
+            });
+
+            setTimeout(() => {
+                if (target) {
+                    target.selectionStart = target.selectionEnd = newCursorPosition;
+                }
+            }, 0);
         }
     };
+
 
     const handleAddChannel = async () => {
         const name = prompt('新しいチャンネル名を入力してください');
@@ -372,16 +385,17 @@ export default function HomePage() {
                 </div>
 
                 {/* メッセージ入力 */}
-                <form onSubmit={handleSendMessage} className="p-3 border-top bg-white d-flex align-items-end">
-          <textarea
-              className="form-control me-2"
-              placeholder="メッセージを入力... (Ctrl+Enter / ⌘+Enterで投稿、Enterは改行)"
-              value={newMessage}
-              onChange={e => setNewMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={2}
-              style={{ resize: 'none' }}
-          />
+                {/* メッセージ入力 */}
+                <form onSubmit={handleSendMessage} className="p-4 border-top bg-white d-flex align-items-end">
+    <textarea
+        className="form-control me-2"
+        placeholder="メッセージを入力... (Ctrl+Enter / ⌘+Enterで投稿、Enterは改行)"
+        value={newMessage}
+        onChange={e => setNewMessage(e.target.value)}
+        onKeyDown={handleKeyDown}
+        rows={4}
+        style={{ resize: 'none' }}
+    />
                     <button
                         className="btn btn-outline-secondary me-2"
                         type="button"
