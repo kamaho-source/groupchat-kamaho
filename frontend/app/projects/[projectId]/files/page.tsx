@@ -56,6 +56,7 @@ export default function FilesPage() {
 
     const handleDelete = async (id: number) => {
         try {
+            if (!confirm('本当に削除しますか？')) return
             await axios.delete(`/api/projects/${projectId}/files/${id}`)
             await fetchFiles()
         } catch (err) {
