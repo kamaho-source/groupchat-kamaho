@@ -11,7 +11,6 @@ interface Message {
     id: number;
     user: string;
     content?: string;
-    // Laravel 側で返すときに file_url と mime_type, file_name を含める想定
     file_url?: string;
     file_name?: string;
     mime_type?: string;
@@ -118,11 +117,18 @@ export default function HomePage() {
         }
     };
 
+    // ポーリングで新着メッセージ取得
     useEffect(() => {
-        if (currentUser) {
-            fetchChannels();
+        if (!currentUser) return;
+
+        fetchChannels();
+        fetchMessages(currentChannel);
+
+        const interval = setInterval(() => {
             fetchMessages(currentChannel);
-        }
+        }, 3000);
+
+        return () => clearInterval(interval);
     }, [currentChannel, currentUser]);
 
     const handleLogout = async () => {
@@ -174,7 +180,6 @@ export default function HomePage() {
         }
     };
 
-
     const handleAddChannel = async () => {
         const name = prompt('新しいチャンネル名を入力してください');
         if (!name) return;
@@ -191,7 +196,6 @@ export default function HomePage() {
     const renderFileInline = (url: string, mime: string | undefined, filename: string | undefined) => {
         if (!mime || !url) return null;
         if (mime.startsWith('image/')) {
-            // 画像は <img> で表示
             return (
                 <div className="my-2 text-center">
                     <img src={url} alt={filename} className="img-fluid rounded" />
@@ -199,7 +203,6 @@ export default function HomePage() {
             );
         }
         if (mime === 'application/pdf') {
-            // PDFは <iframe> で埋め込み
             return (
                 <div className="my-2">
                     <iframe
@@ -211,7 +214,6 @@ export default function HomePage() {
                 </div>
             );
         }
-        // それ以外（Office系など）はリンクを表示
         return (
             <div className="mt-2">
                 <a href={url} download className="d-flex align-items-center">
@@ -259,7 +261,6 @@ export default function HomePage() {
                                     style={{ cursor: 'pointer' }}
                                     onClick={() => {
                                         setCurrentChannel(ch.id);
-                                        // モバイルオフキャンバスを自動閉じ
                                         const offcanvasEl = document.getElementById('channelSidebar');
                                         if (offcanvasEl) {
                                             // @ts-ignore
@@ -341,12 +342,12 @@ export default function HomePage() {
                                     </div>
                                     {isEditing ? (
                                         <div className="d-flex">
-                      <textarea
-                          className="form-control me-2"
-                          rows={2}
-                          value={editedContent}
-                          onChange={e => setEditedContent(e.target.value)}
-                      />
+                                            <textarea
+                                                className="form-control me-2"
+                                                rows={2}
+                                                value={editedContent}
+                                                onChange={e => setEditedContent(e.target.value)}
+                                            />
                                             <button
                                                 className="btn btn-sm btn-primary me-1"
                                                 onClick={async () => {
@@ -369,10 +370,8 @@ export default function HomePage() {
                                         </div>
                                     ) : (
                                         <>
-                                            {/* テキストメッセージをMarkdownとして表示 */}
                                             <div className="bg-white rounded p-2 border" style={{ whiteSpace: 'pre-wrap' }}>
                                                 {renderContent(msg.content)}
-                                                {/* ファイルがある場合はインライン表示 */}
                                                 {msg.file_url && renderFileInline(msg.file_url, msg.mime_type, msg.file_name)}
                                             </div>
                                         </>
@@ -385,17 +384,16 @@ export default function HomePage() {
                 </div>
 
                 {/* メッセージ入力 */}
-                {/* メッセージ入力 */}
                 <form onSubmit={handleSendMessage} className="p-4 border-top bg-white d-flex align-items-end">
-    <textarea
-        className="form-control me-2"
-        placeholder="メッセージを入力... (Ctrl+Enter / ⌘+Enterで投稿、Enterは改行)"
-        value={newMessage}
-        onChange={e => setNewMessage(e.target.value)}
-        onKeyDown={handleKeyDown}
-        rows={4}
-        style={{ resize: 'none' }}
-    />
+                    <textarea
+                        className="form-control me-2"
+                        placeholder="メッセージを入力... (Ctrl+Enter / ⌘+Enterで投稿、Enterは改行)"
+                        value={newMessage}
+                        onChange={e => setNewMessage(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        rows={4}
+                        style={{ resize: 'none' }}
+                    />
                     <button
                         className="btn btn-outline-secondary me-2"
                         type="button"
@@ -403,7 +401,6 @@ export default function HomePage() {
                     >
                         <Upload />
                     </button>
-                    {/* 非表示の file input */}
                     <input
                         type="file"
                         ref={fileInputRef}
