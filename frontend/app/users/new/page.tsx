@@ -1,152 +1,309 @@
-'use client';
+'use client'
 
-import { useState, useEffect } from 'react';
-import { UserPlus, Eye, EyeOff } from 'lucide-react';
-import axios from '@/lib/axios';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import axios from '@/lib/axios'
 
-export default function UserCreatePage() {
-    const router = useRouter();
-    const [userId, setUserId] = useState('');
-    const [name, setName] = useState('');
-    const [password, setPassword] = useState('');
-    const [passwordConfirm, setPasswordConfirm] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
-    const [showConfirm, setShowConfirm] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
+// Material UI
+import {
+    Container,
+    Typography,
+    Box,
+    Stack,
+    Alert,
+    Card,
+    CardContent,
+    TextField,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+    Button,
+    Avatar,
+    Divider,
+    IconButton,
+    InputAdornment,
+} from '@mui/material'
+import type { SelectChangeEvent } from '@mui/material/Select'
+import { LoadingButton } from '@mui/lab'
+import * as MuiIcons from '@mui/icons-material'
+import FolderIcon from '@mui/icons-material/Folder'
+import Visibility from '@mui/icons-material/Visibility'
+import VisibilityOff from '@mui/icons-material/VisibilityOff'
 
-    // マウント時に CSRF Cookie を取得
+// -----------------------------
+// Types & Constants
+// -----------------------------
+
+type Role = 'admin' | 'manager' | 'member' | 'viewer'
+
+const ROLES: { label: string; value: Role }[] = [
+    { label: '管理者', value: 'admin' },
+    { label: 'マネージャー', value: 'manager' },
+    { label: 'メンバー', value: 'member' },
+    { label: '閲覧のみ', value: 'viewer' },
+]
+
+const ICON_OPTIONS = [
+    'Folder',
+    'AccountCircle',
+    'Person',
+    'Star',
+    'Build',
+    'Code',
+    'School',
+    'Group',
+    'Badge',
+    'WorkspacePremium',
+] as const
+
+// -----------------------------
+// Component
+// -----------------------------
+
+export default function NewUserPage() {
+    const router = useRouter()
+
+    // 追加: ユーザーID
+    const [userId, setUserId] = useState('')
+
+    // フォーム状態（メール削除済み）
+    const [fullName, setFullName] = useState('')
+    const [role, setRole] = useState<Role>('member')
+    const [password, setPassword] = useState('')
+    const [passwordConfirm, setPasswordConfirm] = useState('')
+    const [showPw, setShowPw] = useState(false)
+    const [showPwConfirm, setShowPwConfirm] = useState(false)
+
+    // アイコン（どちらか）
+    const [iconName, setIconName] = useState<string>('') // Material Icons 名
+    const [iconFile, setIconFile] = useState<File | null>(null) // 画像アップロード
+    const [iconPreviewUrl, setIconPreviewUrl] = useState<string | null>(null)
+
+    const [submitting, setSubmitting] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+
+    // 画像プレビュー生成/破棄
     useEffect(() => {
-        axios.get('/sanctum/csrf-cookie', {
-            withCredentials: true
-        }).catch(console.error);
-    }, []);
+        if (!iconFile) { setIconPreviewUrl(null); return }
+        const url = URL.createObjectURL(iconFile)
+        setIconPreviewUrl(url)
+        return () => URL.revokeObjectURL(url)
+    }, [iconFile])
 
+    // プレビュー用 Avatar ノード
+    const IconPreview = useMemo(() => {
+        if (iconPreviewUrl) return <Avatar src={iconPreviewUrl} sx={{ width: 64, height: 64 }} />
+        const Comp = (MuiIcons as any)[iconName] as React.ElementType | undefined
+        if (Comp) {
+            return (
+                <Avatar sx={{ width: 64, height: 64 }}>
+                    <Comp />
+                </Avatar>
+            )
+        }
+        return (
+            <Avatar sx={{ width: 64, height: 64 }}>
+                <FolderIcon />
+            </Avatar>
+        )
+    }, [iconName, iconPreviewUrl])
+
+    // 送信（メール関連を完全に除外 + ユーザーID必須）
     const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError(null);
+        e.preventDefault()
+        setError(null)
 
+        if (!userId || !fullName || !password) {
+            setError('必須項目が未入力です（ユーザーID / 氏名 / パスワード）')
+            return
+        }
         if (password !== passwordConfirm) {
-            setError('パスワードが一致しません');
-            return;
+            setError('パスワードが一致しません')
+            return
         }
 
-        setLoading(true);
+        setSubmitting(true)
         try {
-            await axios.post(
-                '/api/register',
-                {
+            if (iconFile) {
+                // ファイルあり: multipart/form-data
+                const form = new FormData()
+                form.append('user_id', userId)
+                form.append('name', fullName)
+                form.append('role', role)
+                form.append('password', password)
+                form.append('avatar', iconFile) // バックエンドで受け取るキー名は適宜変更
+
+                await axios.post('/api/users', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+            } else {
+                // ファイルなし: JSON + icon_name
+                await axios.post('/api/users', {
                     user_id: userId,
-                    name,
+                    name: fullName,
+                    role,
                     password,
-                    password_confirmation: passwordConfirm,
-                },
-                { withCredentials: true }
-            );
-            router.push('/');
+                    icon_name: iconName || null,
+                })
+            }
+
+            router.push('/users')
         } catch (err: any) {
-            // Laravel の Validation エラー等を拾えるように
-            const msg =
-                err.response?.data?.message ||
-                err.response?.data?.errors?.[0] ||
-                'ユーザー作成に失敗しました';
-            setError(msg);
+            console.error(err)
+            setError(err?.response?.data?.message || 'ユーザーの作成に失敗しました')
         } finally {
-            setLoading(false);
+            setSubmitting(false)
         }
-    };
+    }
+
+    // ファイル input ID
+    const fileInputId = 'user-avatar-upload-input'
 
     return (
-        <div className="container py-5" style={{ maxWidth: 500 }}>
-            <h2 className="mb-4">
-                <UserPlus size={20} className="me-2" />
-                新規ユーザー作成
-            </h2>
+        <Container maxWidth="sm" sx={{ py: 4 }}>
+            <Typography variant="h4" fontWeight={700} gutterBottom>
+                ユーザー新規作成
+            </Typography>
 
-            {error && <div className="alert alert-danger">{error}</div>}
+            {error && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                    {error}
+                </Alert>
+            )}
 
-            <form onSubmit={handleSubmit}>
-                <div className="mb-3">
-                    <label htmlFor="userId" className="form-label">
-                        ユーザーID
-                    </label>
-                    <input
-                        id="userId"
-                        type="text"
-                        className="form-control"
-                        value={userId}
-                        onChange={(e) => setUserId(e.target.value)}
-                        required
-                    />
-                </div>
+            <Card variant="outlined">
+                <CardContent>
+                    <Box component="form" noValidate onSubmit={handleSubmit}>
+                        <Stack spacing={3}>
+                            {/* ユーザーID */}
+                            <TextField
+                                label="ログイン用ユーザーID"
+                                value={userId}
+                                onChange={(e) => setUserId(e.target.value)}
+                                required
+                                fullWidth
+                                inputProps={{ maxLength: 64 }}
+                                helperText="英数字・記号を含むID（必要に応じて制約を追加してください）"
+                            />
 
-                <div className="mb-3">
-                    <label htmlFor="name" className="form-label">
-                        名前
-                    </label>
-                    <input
-                        id="name"
-                        type="text"
-                        className="form-control"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        required
-                    />
-                </div>
+                            {/* 氏名 */}
+                            <TextField
+                                label="氏名"
+                                value={fullName}
+                                onChange={(e) => setFullName(e.target.value)}
+                                required
+                                fullWidth
+                            />
 
-                {/* パスワード */}
-                <div className="mb-3">
-                    <label htmlFor="password" className="form-label">
-                        パスワード
-                    </label>
-                    <div className="input-group">
-                        <input
-                            id="password"
-                            type={showPassword ? 'text' : 'password'}
-                            className="form-control"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                        />
-                        <span
-                            className="input-group-text"
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => setShowPassword((v) => !v)}
-                        >
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-            </span>
-                    </div>
-                </div>
+                            {/* 役割 */}
+                            <FormControl fullWidth>
+                                <InputLabel id="role-select-label">権限ロール</InputLabel>
+                                <Select
+                                    labelId="role-select-label"
+                                    label="権限ロール"
+                                    value={role}
+                                    onChange={(e: SelectChangeEvent<Role>) => setRole(e.target.value as Role)}
+                                >
+                                    {ROLES.map((r) => (
+                                        <MenuItem key={r.value} value={r.value}>
+                                            {r.label}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
 
-                {/* パスワード（確認） */}
-                <div className="mb-3">
-                    <label htmlFor="passwordConfirm" className="form-label">
-                        パスワード（確認）
-                    </label>
-                    <div className="input-group">
-                        <input
-                            id="passwordConfirm"
-                            type={showConfirm ? 'text' : 'password'}
-                            className="form-control"
-                            value={passwordConfirm}
-                            onChange={(e) => setPasswordConfirm(e.target.value)}
-                            required
-                        />
-                        <span
-                            className="input-group-text"
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => setShowConfirm((v) => !v)}
-                        >
-              {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
-            </span>
-                    </div>
-                </div>
+                            {/* パスワード */}
+                            <TextField
+                                label="パスワード"
+                                type={showPw ? 'text' : 'password'}
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                                fullWidth
+                                InputProps={{
+                                    endAdornment: (
+                                        <InputAdornment position="end">
+                                            <IconButton onClick={() => setShowPw((v) => !v)} edge="end" aria-label="パスワード表示切替">
+                                                {showPw ? <VisibilityOff /> : <Visibility />}
+                                            </IconButton>
+                                        </InputAdornment>
+                                    ),
+                                }}
+                            />
 
-                <button type="submit" className="btn btn-success w-100" disabled={loading}>
-                    {loading ? '保存中…' : 'ユーザー作成'}
-                </button>
-            </form>
-        </div>
-    );
+                            {/* パスワード確認 */}
+                            <TextField
+                                label="パスワード（確認）"
+                                type={showPwConfirm ? 'text' : 'password'}
+                                value={passwordConfirm}
+                                onChange={(e) => setPasswordConfirm(e.target.value)}
+                                required
+                                fullWidth
+                                InputProps={{
+                                    endAdornment: (
+                                        <InputAdornment position="end">
+                                            <IconButton onClick={() => setShowPwConfirm((v) => !v)} edge="end" aria-label="パスワード表示切替">
+                                                {showPwConfirm ? <VisibilityOff /> : <Visibility />}
+                                            </IconButton>
+                                        </InputAdornment>
+                                    ),
+                                }}
+                            />
+
+                            {/* アイコン設定 */}
+                            <Box>
+                                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                    アイコン（選択 or 画像アップロード）
+                                </Typography>
+                                <Stack direction="row" spacing={2} alignItems="center">
+                                    {IconPreview}
+                                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flex={1}>
+                                        {/* Material Icons から選択 */}
+                                        <FormControl fullWidth>
+                                            <InputLabel id="icon-select-label">Material Icons から選択</InputLabel>
+                                            <Select
+                                                labelId="icon-select-label"
+                                                label="Material Icons から選択"
+                                                value={iconName}
+                                                onChange={(e) => { setIconName(e.target.value as string); setIconFile(null) }}
+                                            >
+                                                <MenuItem value=""><em>未選択</em></MenuItem>
+                                                {ICON_OPTIONS.map((name) => {
+                                                    const Comp = (MuiIcons as any)[name] as React.ElementType
+                                                    return (
+                                                        <MenuItem key={name} value={name}>
+                                                            <Stack direction="row" spacing={1} alignItems="center">
+                                                                <Comp />
+                                                                <span>{name}</span>
+                                                            </Stack>
+                                                        </MenuItem>
+                                                    )
+                                                })}
+                                            </Select>
+                                        </FormControl>
+
+                                        <Divider flexItem orientation="vertical" sx={{ display: { xs: 'none', sm: 'block' } }} />
+
+                                        {/* 画像アップロード */}
+                                        <Stack direction="row" spacing={1} alignItems="center">
+                                            <input id={fileInputId} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0] || null; setIconFile(f); if (f) setIconName('') }} />
+                                            <label htmlFor={fileInputId}>
+                                                <Button variant="outlined" component="span">画像をアップロード</Button>
+                                            </label>
+                                            {iconFile && (<Button color="inherit" onClick={() => setIconFile(null)}>クリア</Button>)}
+                                        </Stack>
+                                    </Stack>
+                                </Stack>
+                            </Box>
+
+                            {/* フッター操作 */}
+                            <Stack direction="row" spacing={2} justifyContent="flex-end">
+                                <Button type="button" variant="text" onClick={() => router.push('/users')}>キャンセル</Button>
+                                <LoadingButton type="submit" variant="contained" loading={submitting}>作成</LoadingButton>
+                            </Stack>
+                        </Stack>
+                    </Box>
+                </CardContent>
+            </Card>
+        </Container>
+    )
 }

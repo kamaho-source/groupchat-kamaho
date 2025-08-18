@@ -12,6 +12,7 @@ use Laravel\Fortify\Http\Controllers\AuthenticatedSessionController;
 use Laravel\Fortify\Http\Controllers\RegisteredUserController;
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\MessageController;
+use App\Http\Controllers\UserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -26,10 +27,14 @@ Route::middleware([
     Route::get('user', function (Request $request) {
         return response()->json($request->user());
     });
-    //現在登録されているユーザーを表示する
-    Route::get('users', function (Request $request) {
-        return response()->json($request->user()->all());
-    });
+    // ユーザー一覧取得（アイコン情報含む）
+    Route::get('users', [UserController::class, 'index']);
+
+    // ユーザー個別の取得・更新（メール不使用、パスワードは別エンドポイント）
+    Route::get('users/{user}', [UserController::class, 'show']);
+    Route::put('users/{user}', [UserController::class, 'update']);               // JSON（画像なし）
+    Route::post('users/{user}', [UserController::class, 'updateWithAvatar']);    // multipart（画像あり）
+    Route::put('users/{user}/password', [UserController::class, 'updatePassword']); // 管理者/マネージャーのみ
 
     // チャンネル／メッセージ
     Route::apiResource('channels', ChannelController::class);
