@@ -61,7 +61,10 @@ class UserController extends Controller
 
         $user->name = $data['name'];
 
-        // role は管理者/マネージャーのみ変更可
+        // role は管理者/マネージャーのみ変更可（リクエストに role があって権限がない場合は明示的に403）
+        if ($request->exists('role') && !$this->isAdminOrManager($actor)) {
+            abort(403, 'ロール変更権限がありません');
+        }
         if (array_key_exists('role', $data) && $this->isAdminOrManager($actor)) {
             $user->role = $data['role'] ?? $user->role;
         }
@@ -69,10 +72,21 @@ class UserController extends Controller
         // icon_name が送られてきた場合：画像を解除してアイコンに切替（null も許可）
         if ($request->exists('icon_name')) {
             $user->icon_name = $data['icon_name'] ?: null;
+
+            // 旧来の単一パスを削除
             if (!empty($user->avatar_path)) {
                 Storage::disk('public')->delete($user->avatar_path);
-                $user->avatar_path = null;
             }
+
+            // ユーザー用ディレクトリ配下を掃除（avatars/{id}）
+            $dir = 'avatars/' . $user->id;
+            if (Storage::disk('public')->exists($dir)) {
+                foreach (Storage::disk('public')->files($dir) as $f) {
+                    Storage::disk('public')->delete($f);
+                }
+            }
+
+            $user->avatar_path = null;
         }
 
         $user->save();
@@ -115,7 +129,10 @@ class UserController extends Controller
 
         $user->name = $data['name'];
 
-        // role は管理者/マネージャーのみ変更可
+        // role は管理者/マネージャーのみ変更可（リクエストに role があって権限がない場合は明示的に403）
+        if ($request->exists('role') && !$this->isAdminOrManager($actor)) {
+            abort(403, 'ロール変更権限がありません');
+        }
         if (array_key_exists('role', $data) && $this->isAdminOrManager($actor)) {
             $user->role = $data['role'] ?? $user->role;
         }
@@ -215,5 +232,17 @@ class UserController extends Controller
     private function isAdminOrManager(User $user): bool
     {
         return in_array($user->role, ['admin', 'manager'], true);
+    }
+
+    // ユーザー一覧取得の権限チェック（全認証ユーザーに許可）
+    private function authorizeList(?User $user): void
+    {
+        if (!$user) {
+            abort(401);
+        }
+        // 必要に応じて、管理者/マネージャーに限定するなら以下のように変更:
+        // if (!in_array($user->role, ['admin', 'manager'], true)) {
+        //     abort(403, '一覧取得の権限がありません');
+        // }
     }
 }

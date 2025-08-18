@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
     AppBar, Toolbar, Typography, IconButton, Drawer, List, ListItemButton, ListItemText,
     Box, Stack, Divider, Button, TextField, Avatar, Paper, useMediaQuery, Tooltip,
-    Snackbar, Alert, CircularProgress, Menu, MenuItem, ListItemIcon
+    Snackbar, Alert, CircularProgress, Menu, MenuItem, ListItemIcon,
+    Dialog, DialogTitle, DialogContent, DialogActions, FormGroup, FormControlLabel, Checkbox, Switch, Chip
 } from '@mui/material';
 import {
     Send as SendIcon,
@@ -31,10 +32,12 @@ import BadgeIcon from '@mui/icons-material/Badge';
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
 import { Container as MuiContainer } from '@mui/material';
 import { useRouter, usePathname } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
+import dynamic from 'next/dynamic';
 import remarkGfm from 'remark-gfm';
 import axios from '@/lib/axios';
-import * as MuiIcons from '@mui/icons-material';
+import ChannelPrivacySelector from '@/components/ChannelPrivacySelector';
+
+const ReactMarkdownLazy = dynamic(() => import('react-markdown'), { ssr: false });
 
 // ------------------------------
 // Types
@@ -53,6 +56,7 @@ interface Message {
 interface Channel {
     id: number;
     name: string;
+    is_private?: boolean;
 }
 
 // ------------------------------
@@ -144,9 +148,9 @@ const FilePreview: React.FC<{ url?: string; mime?: string; filename?: string }> 
 // ------------------------------
 // Markdown renderer
 // ------------------------------
-const MarkdownContent: React.FC<{ text?: string; onCopy?: (ok: boolean) => void }> = ({ text = '', onCopy }) => {
+const MarkdownContentBase: React.FC<{ text?: string; onCopy?: (ok: boolean) => void }> = ({ text = '', onCopy }) => {
     return (
-        <ReactMarkdown
+        <ReactMarkdownLazy
             remarkPlugins={[remarkGfm]}
             components={{
                 a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
@@ -175,9 +179,11 @@ const MarkdownContent: React.FC<{ text?: string; onCopy?: (ok: boolean) => void 
             }}
         >
             {text}
-        </ReactMarkdown>
+        </ReactMarkdownLazy>
     );
 };
+// text が変わらない限り再描画しない
+const MarkdownContent = React.memo(MarkdownContentBase, (prev, next) => prev.text === next.text);
 
 // ------------------------------
 // Icons map for known Material Icons names (minimized bundle)
@@ -222,9 +228,7 @@ const MessageItem: React.FC<{
     if (resolvedUrl) {
         avatarNode = <Avatar src={resolvedUrl} />;
     } else if (profile?.icon_name) {
-        const fixed = ICON_MAP[profile.icon_name];
-        const dynamic = (MuiIcons as any)[profile.icon_name] as React.ElementType | undefined;
-        const Comp = fixed || dynamic;
+        const Comp = ICON_MAP[profile.icon_name];
         avatarNode = Comp ? (
             <Avatar><Comp /></Avatar>
         ) : avatarNode;
@@ -307,7 +311,7 @@ const ChannelList: React.FC<{
                         selected={ch.id === currentChannel}
                         onClick={() => onSelect(ch.id)}
                     >
-                        <ListItemText primary={`# ${ch.name}`} />
+                        <ListItemText primary={`# ${ch.name}${ch.is_private ? ' 🔒' : ''}`} />
                     </ListItemButton>
                 ))}
             </List>
@@ -392,7 +396,16 @@ export default function HomePage() {
 
     const [currentUser, setCurrentUser] = useState<string | null>(null);
     const [isAdmin, setIsAdmin] = useState<boolean>(false);
+    const [isManager, setIsManager] = useState<boolean>(false);
     const [isAuthChecked, setIsAuthChecked] = useState(false);
+
+    // アクセス設定ダイアログ
+    const [privacyOpen, setPrivacyOpen] = useState(false);
+    const [privacySaving, setPrivacySaving] = useState(false);
+    const [privacyIsPrivate, setPrivacyIsPrivate] = useState<boolean>(false);
+    const [privacyMemberIds, setPrivacyMemberIds] = useState<number[]>([]);
+    const [allUsers, setAllUsers] = useState<Array<{ id: number; name: string }>>([]);
+    const [currentChannelMemberIds, setCurrentChannelMemberIds] = useState<number[]>([]);
 
     const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
     const [editedContent, setEditedContent] = useState<string>('');
@@ -456,26 +469,45 @@ export default function HomePage() {
     const [loadingInitial, setLoadingInitial] = useState(true);
     const [sending, setSending] = useState(false);
 
-    // 認証チェック
-    useEffect(() => {
-        (async () => {
-            try {
-                const res = await axios.get('/api/user');
-                setCurrentUser(res.data?.name ?? null);
-                // 管理者判定（APIの形に応じて調整）
-                const admin =
-                    !!res.data?.is_admin ||
-                    res.data?.role === 'admin' ||
-                    (Array.isArray(res.data?.roles) && res.data.roles.includes('admin'));
-                setIsAdmin(Boolean(admin));
-            } catch {
-                setCurrentUser(null);
-                setIsAdmin(false);
-            } finally {
-                setIsAuthChecked(true);
-            }
-        })();
+    // 認証チェック（初回 + フォーカス/可視化時にも再取得）
+    const refreshAuth = useCallback(async () => {
+        try {
+            // キャッシュ回避のためにパラメータを付与
+            const res = await axios.get('/api/user', { params: { _: Date.now() } });
+            setCurrentUser(res.data?.name ?? null);
+            // 管理者/マネージャー判定（APIの形に応じて調整）
+            const admin =
+                !!res.data?.is_admin ||
+                res.data?.role === 'admin' ||
+                (Array.isArray(res.data?.roles) && res.data.roles.includes('admin'));
+            const manager =
+                res.data?.role === 'manager' ||
+                (Array.isArray(res.data?.roles) && res.data.roles.includes('manager'));
+            setIsAdmin(Boolean(admin));
+            setIsManager(Boolean(manager));
+        } catch {
+            setCurrentUser(null);
+            setIsAdmin(false);
+            setIsManager(false);
+        } finally {
+            setIsAuthChecked(true);
+        }
     }, []);
+
+    useEffect(() => {
+        void refreshAuth();
+
+        const onFocus = () => { void refreshAuth(); };
+        const onVisibility = () => { if (!document.hidden) void refreshAuth(); };
+
+        window.addEventListener('focus', onFocus);
+        document.addEventListener('visibilitychange', onVisibility);
+
+        return () => {
+            window.removeEventListener('focus', onFocus);
+            document.removeEventListener('visibilitychange', onVisibility);
+        };
+    }, [refreshAuth]);
 
     // 未認証時リダイレクト
     useEffect(() => {
@@ -502,7 +534,10 @@ export default function HomePage() {
 
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = window.setInterval(() => {
-            if (!cancelled) fetchMessages(currentChannel);
+            // 背景タブではポーリングを抑止
+            if (!cancelled && !document.hidden) {
+                fetchMessages(currentChannel);
+            }
         }, 3000);
 
         return () => {
@@ -534,7 +569,15 @@ export default function HomePage() {
     const fetchMessages = async (channelId: number) => {
         try {
             const res = await axios.get(`/api/channels/${channelId}/messages`);
-            setMessages(res.data);
+            const data = res.data as Message[];
+            setMessages((prev) => {
+                if (prev.length === data.length) {
+                    const prevLast = prev[prev.length - 1]?.id;
+                    const nextLast = data[data.length - 1]?.id;
+                    if (prevLast === nextLast) return prev; // 変更なし
+                }
+                return data;
+            });
         } catch {
             setMessages([]);
             setToast({ open: true, msg: 'メッセージ取得に失敗しました。', sev: 'error' });
@@ -579,6 +622,33 @@ export default function HomePage() {
             }
         })();
     }, [currentUser]);
+
+    // 現在のチャンネルがプライベートかつ管理者/マネージャーのとき、メンバーを自動取得
+    useEffect(() => {
+        const load = async () => {
+            if (!currentUser) return;
+            const ch = channels.find(c => c.id === currentChannel);
+            if (!ch || !ch.is_private || !(isAdmin || isManager)) {
+                setCurrentChannelMemberIds([]);
+                return;
+            }
+            try {
+                // allUsers が未ロードなら取得
+                if (allUsers.length === 0) {
+                    const ures = await axios.get('/api/users');
+                    const list = (ures.data as any[]).map(u => ({ id: Number(u.id), name: u.name }));
+                    setAllUsers(list);
+                }
+                const res = await axios.get(`/api/channels/${currentChannel}/members`);
+                setCurrentChannelMemberIds((res.data?.member_ids || []).map((n: any) => Number(n)));
+            } catch {
+                // 失敗時は空にしておく
+                setCurrentChannelMemberIds([]);
+            }
+        };
+        void load();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentChannel, channels, isAdmin, isManager, currentUser]);
 
     // API: send message
     const sendMessage = async () => {
@@ -659,6 +729,24 @@ export default function HomePage() {
         setEditedContent('');
     };
 
+    // 情報バーからアクセス設定ダイアログを開く
+    const openPrivacyDialog = async () => {
+        try {
+            setPrivacyOpen(true);
+            const res = await axios.get(`/api/channels/${currentChannel}/members`);
+            setPrivacyIsPrivate(Boolean(res.data?.is_private));
+            setPrivacyMemberIds((res.data?.member_ids || []).map((n: any) => Number(n)));
+            if (allUsers.length === 0) {
+                const ures = await axios.get('/api/users');
+                const list = (ures.data as any[]).map(u => ({ id: Number(u.id), name: u.name }));
+                setAllUsers(list);
+            }
+        } catch {
+            setToast({ open: true, msg: 'アクセス設定の取得に失敗しました。', sev: 'error' });
+            setPrivacyOpen(false);
+        }
+    };
+
     // ファイル選択起動
     const triggerFileSelect = () => fileInputRef.current?.click();
 
@@ -687,7 +775,9 @@ export default function HomePage() {
         );
     }
 
-    const currentChannelName = channels.find(c => c.id === currentChannel)?.name || 'loading...';
+    const currentChannelObj = channels.find(c => c.id === currentChannel);
+    const currentChannelName = currentChannelObj?.name || 'loading...';
+    const isPrivateCurrent = Boolean(currentChannelObj?.is_private);
     const canDeleteChannel = isAdmin && currentChannel !== DEFAULT_CHANNEL_ID;
 
     return (
@@ -713,7 +803,7 @@ export default function HomePage() {
                             aria-haspopup="true"
                             aria-expanded={openChannelMenu ? 'true' : undefined}
                         >
-                            # {currentChannelName}
+                            # {currentChannelName}{isPrivateCurrent ? ' 🔒' : ''}
                         </Button>
 
                         <Menu
@@ -730,10 +820,36 @@ export default function HomePage() {
                                     selected={ch.id === currentChannel}
                                     onClick={() => handleSelectChannel(ch.id)}
                                 >
-                                    # {ch.name}
+                                    # {ch.name}{ch.is_private ? ' 🔒' : ''}
                                 </MenuItem>
                             ))}
                             <Divider />
+                            {(isAdmin || isManager) && (
+                                <MenuItem
+                                    onClick={async () => {
+                                        handleCloseChannelMenu();
+                                        // 初期ロード
+                                        try {
+                                            setPrivacyOpen(true);
+                                            // 現在の設定
+                                            const res = await axios.get(`/api/channels/${currentChannel}/members`);
+                                            setPrivacyIsPrivate(Boolean(res.data?.is_private));
+                                            setPrivacyMemberIds((res.data?.member_ids || []).map((n: any) => Number(n)));
+                                            // ユーザー一覧（必要なら取得）
+                                            if (allUsers.length === 0) {
+                                                const ures = await axios.get('/api/users');
+                                                const list = (ures.data as any[]).map(u => ({ id: Number(u.id), name: u.name }));
+                                                setAllUsers(list);
+                                            }
+                                        } catch {
+                                            setToast({ open: true, msg: 'アクセス設定の取得に失敗しました。', sev: 'error' });
+                                            setPrivacyOpen(false);
+                                        }
+                                    }}
+                                >
+                                    アクセス設定…
+                                </MenuItem>
+                            )}
                             <MenuItem
                                 onClick={() => {
                                     handleCloseChannelMenu();
@@ -819,6 +935,27 @@ export default function HomePage() {
             {/* Main */}
             <Box component="main" sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
                 <Toolbar /> {/* AppBar offset */}
+
+                {/* プライベートチャンネルの閲覧メンバー表示（管理者/マネージャーのみ） */}
+                {isPrivateCurrent && (isAdmin || isManager) && (
+                    <Box sx={{ px: 2, pt: 1 }}>
+                        <Paper variant="outlined" sx={{ p: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            <Typography variant="caption" color="text.secondary">閲覧メンバー:</Typography>
+                            {currentChannelMemberIds.length === 0 ? (
+                                <Typography variant="caption" color="text.secondary">なし</Typography>
+                            ) : (
+                                currentChannelMemberIds.map((uid) => {
+                                    const name = allUsers.find(u => u.id === uid)?.name ?? `ID:${uid}`;
+                                    return <Chip key={uid} label={name} size="small" />;
+                                })
+                            )}
+                            <Box sx={{ ml: 'auto' }}>
+                                <Button size="small" onClick={openPrivacyDialog}>アクセス設定…</Button>
+                            </Box>
+                        </Paper>
+                    </Box>
+                )}
+
                 {/* メッセージ一覧 */}
                 <Box sx={{ flex: 1, overflowY: 'auto', bgcolor: 'grey.50', p: 2 }}>
                     {loadingInitial ? (
@@ -871,6 +1008,68 @@ export default function HomePage() {
                     onChange={(e) => e.target.files && setFile(e.target.files[0])}
                 />
             </Box>
+
+            {/* アクセス設定ダイアログ */}
+            <Dialog open={privacyOpen} onClose={() => setPrivacyOpen(false)} fullWidth maxWidth="sm">
+                <DialogTitle>チャンネルのアクセス設定</DialogTitle>
+                <DialogContent dividers>
+                    <Stack spacing={2}>
+                        <ChannelPrivacySelector
+                            isPrivate={privacyIsPrivate}
+                            onChange={setPrivacyIsPrivate}
+                        />
+                        {privacyIsPrivate ? (
+                            <FormGroup>
+                                {allUsers.map((u) => (
+                                    <FormControlLabel
+                                        key={u.id}
+                                        control={
+                                            <Checkbox
+                                                checked={privacyMemberIds.includes(u.id)}
+                                                onChange={(e) => {
+                                                    const checked = e.target.checked;
+                                                    setPrivacyMemberIds((prev) =>
+                                                        checked ? Array.from(new Set([...prev, u.id])) : prev.filter((id) => id !== u.id)
+                                                    );
+                                                }}
+                                            />
+                                        }
+                                        label={u.name}
+                                    />
+                                ))}
+                            </FormGroup>
+                        ) : (
+                            <Alert severity="info">公開チャンネルです。全ユーザーが閲覧できます。</Alert>
+                        )}
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setPrivacyOpen(false)}>キャンセル</Button>
+                    <Button
+                        variant="contained"
+                        disabled={privacySaving}
+                        onClick={async () => {
+                            setPrivacySaving(true);
+                            try {
+                                await axios.put(`/api/channels/${currentChannel}/privacy`, {
+                                    is_private: privacyIsPrivate,
+                                    member_ids: privacyIsPrivate ? privacyMemberIds : [],
+                                });
+                                setToast({ open: true, msg: 'アクセス設定を更新しました。', sev: 'success' });
+                                setPrivacyOpen(false);
+                                // チャンネル一覧を更新して 🔒 の表示など反映
+                                await fetchChannels();
+                            } catch {
+                                setToast({ open: true, msg: '更新に失敗しました。', sev: 'error' });
+                            } finally {
+                                setPrivacySaving(false);
+                            }
+                        }}
+                    >
+                        保存
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             {/* Toast */}
             <Snackbar

@@ -13,6 +13,7 @@ use Laravel\Fortify\Http\Controllers\RegisteredUserController;
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\ChannelPrivacyController;
 
 /*
 |--------------------------------------------------------------------------
@@ -36,13 +37,25 @@ Route::middleware([
     Route::post('users/{user}', [UserController::class, 'updateWithAvatar']);    // multipart（画像あり）
     Route::put('users/{user}/password', [UserController::class, 'updatePassword']); // 管理者/マネージャーのみ
 
+    // チャンネル一覧（権限に応じた結果のみ。resource より先に定義して上書き）
+    Route::get('channels', [ChannelPrivacyController::class, 'index']);
+    // プライバシー設定（管理者/マネージャー）
+    Route::get('channels/{channel}/members', [ChannelPrivacyController::class, 'members']);
+    Route::put('channels/{channel}/privacy', [ChannelPrivacyController::class, 'updatePrivacy']);
+
     // チャンネル／メッセージ
     Route::apiResource('channels', ChannelController::class);
-    Route::get('channels/{channel}/messages', [MessageController::class, 'index']);
-    Route::post('channels/{channel}/messages', [MessageController::class, 'store']);
+
+    // メッセージAPIは閲覧可能性を検証
+    Route::get('channels/{channel}/messages', [MessageController::class, 'index'])
+        ->middleware(\App\Http\Middleware\EnsureChannelViewable::class);
+    Route::post('channels/{channel}/messages', [MessageController::class, 'store'])
+        ->middleware(\App\Http\Middleware\EnsureChannelViewable::class);
     Route::apiResource('messages', MessageController::class);
     // メッセージ更新
-    Route::put('channels/{channel}/messages/{message}', [MessageController::class, 'update']);
+    Route::put('channels/{channel}/messages/{message}', [MessageController::class, 'update'])
+        ->middleware(\App\Http\Middleware\EnsureChannelViewable::class);
+
     Route::get('projects',         [ProjectController::class, 'index']);
     // プロジェクト作成（POST） ← ここを追加！
     Route::post('projects',         [ProjectController::class, 'store']);
