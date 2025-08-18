@@ -92,8 +92,7 @@ return [
         Features::resetPasswords(),
        // Features::emailVerification(),
         Features::updateProfileInformation(),
-        Features::updatePasswords(),
-
+        // Features::updatePasswords(), // ← 本人のパスワード変更は無効化（管理者/マネージャー専用APIを使用）
     ],
 
 ];

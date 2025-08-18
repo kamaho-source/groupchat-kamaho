@@ -11,6 +11,7 @@
 
 body {
   color: var(--chatwork-text);
+  background-color: transparent !important;
 }
 
 .hover-overlay:hover {
