@@ -14,6 +14,7 @@ use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ChannelPrivacyController;
+use App\Http\Controllers\AdminStatsController;
 
 /*
 |--------------------------------------------------------------------------
@@ -39,6 +40,9 @@ Route::middleware([
 
     // チャンネル一覧（権限に応じた結果のみ。resource より先に定義して上書き）
     Route::get('channels', [ChannelPrivacyController::class, 'index']);
+
+    // 管理者向け統計
+    Route::get('admin/stats', [AdminStatsController::class, 'index']);
     // プライバシー設定（管理者/マネージャー）
     Route::get('channels/{channel}/members', [ChannelPrivacyController::class, 'members']);
     Route::put('channels/{channel}/privacy', [ChannelPrivacyController::class, 'updatePrivacy']);
