@@ -953,9 +953,11 @@ export default function HomePage() {
 
             const text = String(msg.content);
 
-            // @ + 名前 の厳密検知（前後が空白/区切り/文頭末尾）
+            // @/＠ + 名前 の厳密検知（前後が空白/区切り/文頭末尾）
             const mentioned = myNames.some((name) => {
-                const pattern = new RegExp(`(^|[\\s,、。!！?？:：;；()（）\\[\\]{}"'\`])@${escapeRegExp(name)}($|[\\s,、。!！?？:：;；()（）\\[\\]{}"'\`])`);
+                const pattern = new RegExp(
+                    `(^|[\\s,、。!！?？:：;；()（）\\[\\]{}"'\`])[@＠]${escapeRegExp(name)}($|[\\s,、。!！?？:：;；()（）\\[\\]{}"'\`])`
+                );
                 return pattern.test(text);
             });
             if (!mentioned) continue;
