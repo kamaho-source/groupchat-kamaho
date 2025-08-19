@@ -6,7 +6,7 @@ import {
     Box, Stack, Divider, Button, TextField, Avatar, Paper, useMediaQuery, Tooltip,
     Snackbar, Alert, CircularProgress, Menu, MenuItem, ListItemIcon,
     Dialog, DialogTitle, DialogContent, DialogActions, FormGroup, FormControlLabel, Checkbox, Switch, Chip,
-    Collapse
+    Collapse, Popper
 } from '@mui/material';
 import {
     Send as SendIcon,
@@ -22,6 +22,7 @@ import {
     DeleteForever as DeleteForeverIcon,
     AccountCircle as AccountCircleIcon,
     Settings as SettingsIcon,
+    NotificationsActive as NotificationsActiveIcon,
     ExpandLess as ExpandLessIcon,
     ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
@@ -56,6 +57,10 @@ interface Message {
     mime_type?: string;
     timestamp: string;
     channelId: number;
+    // 既読情報（APIの形に合わせて柔軟に対応）
+    read_by_names?: string[];
+    read_by_ids?: number[];
+    reads?: Array<number | string>;
 }
 
 interface Channel {
@@ -70,6 +75,7 @@ interface Channel {
 const DEFAULT_CHANNEL_ID = 1;
 const DRAWER_WIDTH = 280;
 const PROFILE_EDIT_PATH = '/users/edit'; // 必要に応じて変更
+const DM_PREFIX = 'dm:'; // DMチャンネル名のプレフィックス（dm:小さいID-大きいID）
 
 // ------------------------------
 // Helpers
@@ -84,6 +90,9 @@ const copyToClipboard = async (text: string) => {
         return false;
     }
 };
+
+// 正規表現エスケープ
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // 画像/アイコンの相対パスをURLに解決するヘルパー（Next.js rewrites 前提）
 // - すでに絶対URLなら、そのパスが /storage/ なら pathname(+search) に落としてプロキシを使う
@@ -116,11 +125,34 @@ const toAssetUrl = (input?: string | null): string | undefined => {
 };
 
 // ------------------------------
-// File preview (image/pdf/others)
+// File preview (image/video/pdf/office/others)
 // ------------------------------
 const FilePreview: React.FC<{ url?: string; mime?: string; filename?: string }> = ({ url, mime, filename }) => {
-    if (!url || !mime) return null;
-    if (mime.startsWith('image/')) {
+    if (!url) return null;
+
+    const ext = (filename?.split('.').pop()?.toLowerCase() || '').trim();
+    const isImage =
+        (mime && mime.startsWith('image/')) ||
+        ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext);
+    const isVideo =
+        (mime && mime.startsWith('video/')) ||
+        ['mp4', 'webm', 'ogg', 'mov', 'm4v'].includes(ext);
+    const isPdf =
+        mime === 'application/pdf' || ext === 'pdf';
+    const isOfficeDoc = (() => {
+        const officeMimes = new Set<string>([
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-powerpoint',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        ]);
+        const officeExts = new Set<string>(['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']);
+        return (mime && officeMimes.has(mime)) || officeExts.has(ext);
+    })();
+
+    if (isImage) {
         return (
             <Box my={1.5} textAlign="center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -128,7 +160,16 @@ const FilePreview: React.FC<{ url?: string; mime?: string; filename?: string }> 
             </Box>
         );
     }
-    if (mime === 'application/pdf') {
+
+    if (isVideo) {
+        return (
+            <Box my={1.5}>
+                <video src={url} controls style={{ width: '100%', borderRadius: 8 }} />
+            </Box>
+        );
+    }
+
+    if (isPdf) {
         return (
             <Box my={1.5} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
                 <iframe
@@ -141,9 +182,36 @@ const FilePreview: React.FC<{ url?: string; mime?: string; filename?: string }> 
             </Box>
         );
     }
+
+    // Office 系はダウンロードで開く
+    if (isOfficeDoc) {
+        return (
+            <Box mt={1}>
+                <Button
+                    component="a"
+                    href={url}
+                    download
+                    startIcon={<UploadIcon />}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    {filename || 'download'}
+                </Button>
+            </Box>
+        );
+    }
+
+    // その他はダウンロードリンク
     return (
         <Box mt={1}>
-            <Button component="a" href={url} download startIcon={<UploadIcon />}>
+            <Button
+                component="a"
+                href={url}
+                download
+                startIcon={<UploadIcon />}
+                target="_blank"
+                rel="noopener noreferrer"
+            >
                 {filename || 'download'}
             </Button>
         </Box>
@@ -220,7 +288,8 @@ const MessageItem: React.FC<{
     onCancelEdit: () => void;
     onCopy: (ok: boolean) => void;
     profile?: { avatar_url?: string | null; avatar_path?: string | null; icon_path?: string | null; icon_name?: string | null };
-}> = ({ msg, isOwn, isEditing, editedContent, onStartEdit, onChangeEdit, onSaveEdit, onCancelEdit, onCopy, profile }) => {
+    readByNames?: string[];
+}> = ({ msg, isOwn, isEditing, editedContent, onStartEdit, onChangeEdit, onSaveEdit, onCancelEdit, onCopy, profile, readByNames }) => {
     const initial = msg.user?.slice(0, 1) || 'U';
     let avatarNode: React.ReactNode = <Avatar sx={{ bgcolor: 'grey.300' }}>{initial}</Avatar>;
 
@@ -238,6 +307,9 @@ const MessageItem: React.FC<{
             <Avatar><Comp /></Avatar>
         ) : avatarNode;
     }
+
+    // 添付ファイルURLを表示用に解決
+    const fileResolvedUrl = toAssetUrl(msg.file_url);
 
     return (
         <Stack direction="row" spacing={2} mb={2}>
@@ -284,7 +356,15 @@ const MessageItem: React.FC<{
                             <Box sx={{ whiteSpace: 'pre-wrap' }}>
                                 <MarkdownContent text={msg.content} onCopy={onCopy} />
                             </Box>
-                            <FilePreview url={msg.file_url} mime={msg.mime_type} filename={msg.file_name} />
+                            <FilePreview url={fileResolvedUrl} mime={msg.mime_type} filename={msg.file_name} />
+
+                            {Array.isArray(readByNames) && readByNames.length > 0 && (
+                                <Box mt={1}>
+                                    <Typography variant="caption" color="text.secondary">
+                                        既読: {readByNames.join(', ')}
+                                    </Typography>
+                                </Box>
+                            )}
                         </>
                     )}
                 </Paper>
@@ -302,8 +382,27 @@ const ChannelList: React.FC<{
     onSelect: (id: number) => void;
     onAdd: () => void;
     onLogout: () => void;
-}> = ({ channels, currentChannel, onSelect, onAdd, onLogout }) => {
+    allUsers: Array<{ id: number; name: string }>;
+    currentUserId: number | null;
+}> = ({ channels, currentChannel, onSelect, onAdd, onLogout, allUsers, currentUserId }) => {
     const [openChannels, setOpenChannels] = useState(true);
+
+    const renderLabel = (ch: Channel) => {
+        // DM: dm:<small-id>-<big-id>
+        const m = /^dm:(\d+)-(\d+)$/.exec(ch.name || '');
+        if (m && currentUserId != null) {
+            const a = Number(m[1]);
+            const b = Number(m[2]);
+            const otherId = currentUserId === a ? b : currentUserId === b ? a : null;
+            if (otherId != null) {
+                const other = allUsers.find(u => u.id === otherId);
+                if (other) return `@ ${other.name} 🔒`;
+            }
+            return `DM ${a}-${b} 🔒`;
+        }
+        return `# ${ch.name}${ch.is_private ? ' 🔒' : ''}`;
+    };
+
     return (
         <Box role="navigation" sx={{ width: DRAWER_WIDTH }}>
             <Toolbar>
@@ -325,7 +424,7 @@ const ChannelList: React.FC<{
                                 onClick={() => onSelect(ch.id)}
                                 sx={{ pl: 3 }}
                             >
-                                <ListItemText primary={`# ${ch.name}${ch.is_private ? ' 🔒' : ''}`} />
+                                <ListItemText primary={renderLabel(ch)} />
                             </ListItemButton>
                         ))}
                     </List>
@@ -356,18 +455,135 @@ const MessageInput: React.FC<{
     onClickUpload: () => void;
     onSend: () => void;
     isSending?: boolean;
-}> = ({ value, onChange, onKeyDown, onClickUpload, onSend, isSending }) => {
+    inputRef?: React.RefObject<HTMLTextAreaElement>;
+    attachedFile?: File | null;
+    onAttachFile?: (f: File) => void;
+    onRemoveAttachment?: () => void;
+}> = ({ value, onChange, onKeyDown, onClickUpload, onSend, isSending, inputRef, attachedFile, onAttachFile, onRemoveAttachment }) => {
+    const formatBytes = (bytes: number) => {
+        if (!bytes && bytes !== 0) return '';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        const v = (bytes / Math.pow(k, i));
+        return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${sizes[i]}`;
+    };
+
+    const handleFiles = (files?: FileList | File[] | null) => {
+        if (!files || (files as FileList).length === 0) return;
+        const file = (files as FileList)[0] ?? (files as File[])[0];
+        if (!file) return;
+        // 1GB 制限（必要に応じて調整）
+        const MAX = 1024 * 1024 * 1024;
+        if (file.size > MAX) {
+            alert('ファイルサイズが大きすぎます（最大1GB）。');
+            return;
+        }
+        // MIME は画面側では広めに許容。サーバが最終判定
+        onAttachFile && onAttachFile(file);
+    };
+
+    const onDropArea = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (isSending) return;
+        if (e.dataTransfer?.files?.length) {
+            handleFiles(e.dataTransfer.files);
+        }
+    };
+
+    const onDragOverArea = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    const onPasteArea = (e: React.ClipboardEvent<HTMLDivElement>) => {
+        if (isSending) return;
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        const files: File[] = [];
+        for (let i = 0; i < items.length; i++) {
+            const it = items[i];
+            if (it.kind === 'file') {
+                const f = it.getAsFile();
+                if (f) files.push(f);
+            }
+        }
+        if (files.length > 0) {
+            e.preventDefault();
+            handleFiles(files);
+        }
+    };
+
+    const renderAttachment = () => {
+        if (!attachedFile) return null;
+        const mime = attachedFile.type || '';
+        const url = URL.createObjectURL(attachedFile);
+        const removeBtn = (
+            <Tooltip title="添付を削除">
+                <IconButton size="small" onClick={onRemoveAttachment} aria-label="添付を削除">
+                    <CloseIcon fontSize="small" />
+                </IconButton>
+            </Tooltip>
+        );
+        if (mime.startsWith('image/')) {
+            return (
+                <Box sx={{ mt: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
+                        {attachedFile.name}（{formatBytes(attachedFile.size)}）
+                    </Typography>
+                    <Box mt={0.5} position="relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={url} alt={attachedFile.name} style={{ maxWidth: '100%', borderRadius: 8 }} />
+                        <Box sx={{ position: 'absolute', top: 8, right: 8, bgcolor: 'background.paper', borderRadius: 1 }}>
+                            {removeBtn}
+                        </Box>
+                    </Box>
+                </Box>
+            );
+        }
+        if (mime.startsWith('video/')) {
+            return (
+                <Box sx={{ mt: 1, position: 'relative' }}>
+                    <Typography variant="caption" color="text.secondary">
+                        {attachedFile.name}（{formatBytes(attachedFile.size)}）
+                    </Typography>
+                    <Box mt={0.5} position="relative">
+                        <video src={url} controls style={{ width: '100%', borderRadius: 8 }} />
+                        <Box sx={{ position: 'absolute', top: 8, right: 8, bgcolor: 'background.paper', borderRadius: 1 }}>
+                            {removeBtn}
+                        </Box>
+                    </Box>
+                </Box>
+            );
+        }
+        return (
+            <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Chip label={`${attachedFile.name}（${formatBytes(attachedFile.size)}）`} />
+                {removeBtn}
+            </Box>
+        );
+    };
+
     return (
-        <Paper square elevation={0} sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+        <Paper
+            square
+            elevation={0}
+            sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}
+            onDrop={onDropArea}
+            onDragOver={onDragOverArea}
+        >
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="flex-end">
                 <TextField
                     fullWidth
                     multiline
                     minRows={4}
                     value={value}
-                    placeholder="メッセージを入力...（Ctrl/⌘ + Enterで送信、Enterは改行）"
+                    placeholder="メッセージを入力...（Ctrl/⌘ + Enterで送信、Enterは改行）\nファイルはクリップ/ドラッグ&ドロップ/ペーストでも添付できます。"
                     onChange={(e) => onChange(e.target.value)}
                     onKeyDown={onKeyDown}
+                    onPaste={onPasteArea}
+                    inputRef={inputRef as any}
                 />
                 <Stack direction="row" spacing={1}>
                     <Tooltip title="ファイルを添付">
@@ -382,6 +598,7 @@ const MessageInput: React.FC<{
                     </Button>
                 </Stack>
             </Stack>
+            {renderAttachment()}
         </Paper>
     );
 };
@@ -423,6 +640,9 @@ export default function HomePage() {
     // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const editorRef = useRef<HTMLTextAreaElement>(null);
+    const lastSeenMessageIdRef = useRef<number>(0);
+    const notifyInitRef = useRef<boolean>(false);
 
     // State
     const [channels, setChannels] = useState<Channel[]>([]);
@@ -434,6 +654,7 @@ export default function HomePage() {
     const [file, setFile] = useState<File | null>(null);
 
     const [currentUser, setCurrentUser] = useState<string | null>(null);
+    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
     const [isAdmin, setIsAdmin] = useState<boolean>(false);
     const [isManager, setIsManager] = useState<boolean>(false);
     const [isAuthChecked, setIsAuthChecked] = useState(false);
@@ -508,12 +729,116 @@ export default function HomePage() {
     const [loadingInitial, setLoadingInitial] = useState(true);
     const [sending, setSending] = useState(false);
 
+    // メンション候補
+    const [mentionOpen, setMentionOpen] = useState(false);
+    const [mentionIndex, setMentionIndex] = useState(0);
+    const [mentionCandidates, setMentionCandidates] = useState<Array<{ id: number; name: string }>>([]);
+    const [mentionRange, setMentionRange] = useState<{ start: number; end: number } | null>(null);
+
+    // 必要に応じユーザー一覧をロード
+    const ensureUsersLoaded = useCallback(async () => {
+        if (allUsers.length > 0) return;
+        try {
+            const ures = await axios.get('/api/users', { params: { _: Date.now() } });
+            const list = (ures.data as any[]).map(u => ({ id: Number(u.id), name: String(u.name) }));
+            setAllUsers(list);
+        } catch {
+            // noop
+        }
+    }, [allUsers.length]);
+
+    // カーソル位置から @フラグメントを検出し候補表示
+    const updateMentionFromCaret = useCallback(async () => {
+        const el = editorRef.current;
+        if (!el) return;
+        const pos = el.selectionStart ?? newMessage.length;
+        const text = newMessage;
+        if (!text || pos < 0) {
+            setMentionOpen(false);
+            setMentionRange(null);
+            return;
+        }
+
+        // 直近の'@'の位置を探す
+        let at = -1;
+        for (let i = pos - 1; i >= 0; i--) {
+            const ch = text[i];
+            if (ch === '@') {
+                at = i;
+                break;
+            }
+            // 区切り文字に当たったら打ち切り
+            if (/\s/.test(ch)) break;
+        }
+        if (at < 0) {
+            setMentionOpen(false);
+            setMentionRange(null);
+            return;
+        }
+
+        // '@'直前は文頭か空白ならOK
+        if (at > 0 && !/\s/.test(text[at - 1])) {
+            setMentionOpen(false);
+            setMentionRange(null);
+            return;
+        }
+
+        const fragment = text.slice(at + 1, pos);
+        if (fragment.length < 1) {
+            // 「@」のみで開かない
+            setMentionOpen(false);
+            setMentionRange(null);
+            return;
+        }
+
+        await ensureUsersLoaded();
+
+        const cand = allUsers
+            .filter(u => u.name && u.name.toLowerCase().startsWith(fragment.toLowerCase()))
+            .slice(0, 8);
+
+        if (cand.length === 0) {
+            setMentionOpen(false);
+            setMentionRange(null);
+            return;
+        }
+
+        setMentionCandidates(cand);
+        setMentionIndex(0);
+        setMentionRange({ start: at, end: pos });
+        setMentionOpen(true);
+    }, [newMessage, allUsers, ensureUsersLoaded]);
+
+    const acceptMention = useCallback((name: string) => {
+        if (!mentionRange) return;
+        const { start, end } = mentionRange;
+        const before = newMessage.slice(0, start);
+        const after = newMessage.slice(end);
+        const next = `${before}@${name} ${after}`;
+        setNewMessage(next);
+        setMentionOpen(false);
+        setMentionRange(null);
+        setMentionCandidates([]);
+        setMentionIndex(0);
+        // キャレット位置を '@name ' の末尾へ
+        setTimeout(() => {
+            const el = editorRef.current;
+            if (!el) return;
+            const caret = (before + '@' + name + ' ').length;
+            el.focus();
+            try {
+                el.setSelectionRange(caret, caret);
+            } catch {}
+        }, 0);
+    }, [mentionRange, newMessage]);
+
     // 認証チェック（初回 + フォーカス/可視化時にも再取得）
     const refreshAuth = useCallback(async () => {
         try {
             // キャッシュ回避のためにパラメータを付与
             const res = await axios.get('/api/user', { params: { _: Date.now() } });
             setCurrentUser(res.data?.name ?? null);
+            setCurrentUserId(Number(res.data?.id) || null);
             // 管理者/マネージャー判定（APIの形に応じて調整）
             const admin =
                 !!res.data?.is_admin ||
@@ -526,6 +851,7 @@ export default function HomePage() {
             setIsManager(Boolean(manager));
         } catch {
             setCurrentUser(null);
+            setCurrentUserId(null);
             setIsAdmin(false);
             setIsManager(false);
         } finally {
@@ -593,6 +919,71 @@ export default function HomePage() {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    // メンション(@名前)検出 → OS通知
+    useEffect(() => {
+        if (!currentUser) return;
+        if (!Array.isArray(messages) || messages.length === 0) return;
+
+        const lastIdInList = messages[messages.length - 1]?.id || 0;
+
+        // 初回は既読位置のみ更新（大量通知防止）
+        if (!notifyInitRef.current) {
+            notifyInitRef.current = true;
+            lastSeenMessageIdRef.current = Math.max(lastSeenMessageIdRef.current, lastIdInList);
+            return;
+        }
+
+        const myNames: string[] = [];
+        const raw = currentUser;
+        if (raw) {
+            myNames.push(raw);
+            const trimmed = raw.trim();
+            if (trimmed && trimmed !== raw) myNames.push(trimmed);
+        }
+
+        const channelName = channels.find((c) => c.id === currentChannel)?.name || '';
+
+        const newMsgs = messages.filter((m) => m.id > (lastSeenMessageIdRef.current || 0));
+        for (const msg of newMsgs) {
+            if (!msg?.content) continue;
+            if (msg.user === currentUser) continue;
+
+            const text = String(msg.content);
+
+            // @ + 名前 の厳密検知（前後が空白/区切り/文頭末尾）
+            const mentioned = myNames.some((name) => {
+                const pattern = new RegExp(`(^|[\\s,、。!！?？:：;；()（）\\[\\]{}"'\`])@${escapeRegExp(name)}($|[\\s,、。!！?？:：;；()（）\\[\\]{}"'\`])`);
+                return pattern.test(text);
+            });
+            if (!mentioned) continue;
+
+            // Notification API によるOS通知
+            if (typeof window !== 'undefined' && 'Notification' in window) {
+                const show = () => {
+                    try {
+                        new Notification(`「@${raw}」へのメンション`, {
+                            body: `${msg.user}（#${channelName}）：${text.slice(0, 80)}`,
+                            icon: '/favicon.ico',
+                        });
+                    } catch {
+                        // noop
+                    }
+                };
+
+                if (Notification.permission === 'granted') {
+                    show();
+                } else if (Notification.permission !== 'denied') {
+                    Notification.requestPermission().then((p) => {
+                        if (p === 'granted') show();
+                    });
+                }
+            }
+        }
+
+        // 既読位置を更新
+        lastSeenMessageIdRef.current = lastIdInList;
+    }, [messages, currentUser, currentChannel, channels]);
 
     // API: fetch channels
     const fetchChannels = async () => {
@@ -695,19 +1086,39 @@ export default function HomePage() {
         setSending(true);
         try {
             const formData = new FormData();
+            // ルーティングで渡していても、バリデーションによっては必須なことがあるため同梱
+            formData.append('channel_id', String(currentChannel));
+            if (currentUserId != null) formData.append('user_id', String(currentUserId));
             formData.append('user', currentUser || '');
-            if (newMessage.trim()) formData.append('content', newMessage);
-            if (file) formData.append('file', file);
 
-            await axios.post(`/api/channels/${currentChannel}/messages`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
+            // content は必ず付与（空メッセージ + ファイルの場合はファイル名で補完）
+            const contentToSend =
+                newMessage.trim() ||
+                (file ? `添付: ${file.name || 'ファイル'}` : '');
+            formData.append('content', contentToSend);
+
+            if (file) {
+                formData.append('file', file);
+                if (file.name) formData.append('file_name', file.name);
+                if (file.type) formData.append('mime_type', file.type);
+            }
+
+            // Content-Type は axios に任せて境界線を自動付与
+            await axios.post(`/api/channels/${currentChannel}/messages`, formData);
 
             setNewMessage('');
             setFile(null);
             await fetchMessages(currentChannel);
-        } catch {
-            setToast({ open: true, msg: '送信に失敗しました。', sev: 'error' });
+        } catch (e: any) {
+            // サーバの詳細エラーを拾って表示
+            const msg =
+                e?.response?.data?.message ||
+                (e?.response?.data && typeof e.response.data === 'object' && JSON.stringify(e.response.data)) ||
+                '送信に失敗しました。';
+            // 解析しやすいようにログも出す
+            // eslint-disable-next-line no-console
+            console.error('Message post error:', e?.response || e);
+            setToast({ open: true, msg, sev: 'error' });
         } finally {
             setSending(false);
         }
@@ -720,7 +1131,39 @@ export default function HomePage() {
         if (isSubmitCombo) {
             e.preventDefault();
             void sendMessage();
+            return;
         }
+
+        // メンション候補のナビゲーション
+        if (mentionOpen) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setMentionIndex((i) => (i + 1) % Math.max(mentionCandidates.length, 1));
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setMentionIndex((i) => (i - 1 + Math.max(mentionCandidates.length, 1)) % Math.max(mentionCandidates.length, 1));
+                return;
+            }
+            if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                const pick = mentionCandidates[mentionIndex];
+                if (pick) acceptMention(pick.name);
+                return;
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                setMentionOpen(false);
+                setMentionRange(null);
+                return;
+            }
+        }
+
+        // 次フレームでカーソル・値反映後に検出
+        setTimeout(() => {
+            updateMentionFromCaret();
+        }, 0);
     };
 
     // チャンネル追加
@@ -786,13 +1229,88 @@ export default function HomePage() {
         }
     };
 
+    // ▼ DM（ダイレクトメッセージ）関連 ▼
+    const [dmOpen, setDmOpen] = useState(false);
+    const [dmQuery, setDmQuery] = useState('');
+    const [dmLoading, setDmLoading] = useState(false);
+
+    const openOrCreateDm = async (otherUserId: number) => {
+        if (!currentUserId) {
+            setToast({ open: true, msg: 'ユーザー情報の取得に失敗しました。', sev: 'error' });
+            return;
+        }
+        const a = Math.min(currentUserId, otherUserId);
+        const b = Math.max(currentUserId, otherUserId);
+        const dmName = `${DM_PREFIX}${a}-${b}`;
+
+        // 既存チャンネルを検索
+        const exist = channels.find(c => c.name === dmName);
+        if (exist) {
+            setCurrentChannel(exist.id);
+            await fetchMessages(exist.id);
+            setDmOpen(false);
+            return;
+        }
+
+        try {
+            const created = await axios.post('/api/channels', { name: dmName });
+            const newCh = created.data;
+            await axios.put(`/api/channels/${newCh.id}/privacy`, {
+                is_private: true,
+                member_ids: [a, b],
+            });
+            setChannels(prev => [...prev, { ...newCh, is_private: true }]);
+            setCurrentChannel(newCh.id);
+            await fetchMessages(newCh.id);
+            setToast({ open: true, msg: 'DMを開始しました。', sev: 'success' });
+            setDmOpen(false);
+        } catch {
+            setToast({ open: true, msg: 'DMの開始に失敗しました。', sev: 'error' });
+        }
+    };
+
+    // DMダイアログを開いた際にユーザー一覧をロード
+    useEffect(() => {
+        if (!dmOpen) return;
+        // 毎回検索語はリセット
+        setDmQuery('');
+        if (allUsers.length > 0) return;
+
+        let mounted = true;
+        (async () => {
+            setDmLoading(true);
+            try {
+                const ures = await axios.get('/api/users', { params: { _: Date.now() } });
+                const list = (ures.data as any[]).map(u => ({ id: Number(u.id), name: String(u.name) }));
+                if (mounted) setAllUsers(list);
+            } catch {
+                if (mounted) setToast({ open: true, msg: 'ユーザー一覧の取得に失敗しました。', sev: 'error' });
+            } finally {
+                if (mounted) setDmLoading(false);
+            }
+        })();
+
+        return () => { mounted = false; };
+    }, [dmOpen, allUsers.length]);
+    // ▲ DM（ダイレクトメッセージ）関連 ▲
+
     // ファイル選択起動
     const triggerFileSelect = () => fileInputRef.current?.click();
 
     // Drawer コンテンツ
+    // 自分が当事者の DM のみ表示する（dm:<smallId>-<bigId>）
+    const filteredChannels = channels.filter((c) => {
+        const m = /^dm:(\d+)-(\d+)$/.exec(c.name || '');
+        if (!m) return true;
+        if (currentUserId == null) return false;
+        const a = Number(m[1]);
+        const b = Number(m[2]);
+        return currentUserId === a || currentUserId === b;
+    });
+
     const drawerContent = (
         <ChannelList
-            channels={channels}
+            channels={filteredChannels}
             currentChannel={currentChannel}
             onSelect={(id) => {
                 setCurrentChannel(id);
@@ -800,6 +1318,8 @@ export default function HomePage() {
             }}
             onAdd={handleAddChannel}
             onLogout={handleLogout}
+            allUsers={allUsers}
+            currentUserId={currentUserId}
         />
     );
 
@@ -862,7 +1382,7 @@ export default function HomePage() {
                             anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
                             transformOrigin={{ vertical: 'top', horizontal: 'left' }}
                         >
-                            {channels.map((ch) => (
+                            {filteredChannels.map((ch) => (
                                 <MenuItem
                                     key={ch.id}
                                     selected={ch.id === currentChannel}
@@ -916,9 +1436,49 @@ export default function HomePage() {
                             ユーザー編集
                         </MenuItem>
 
+                        {isAdmin && (
+                            <MenuItem
+                                onClick={() => {
+                                    handleCloseUserMenu();
+                                    router.push('/admin');
+                                }}
+                            >
+                                <ListItemIcon>
+                                    <WorkspacePremiumIcon fontSize="small" />
+                                </ListItemIcon>
+                                管理者ダッシュボード
+                            </MenuItem>
+                        )}
+
+                        {isManager && (
+                            <MenuItem
+                                onClick={() => {
+                                    handleCloseUserMenu();
+                                    router.push('/manager');
+                                }}
+                            >
+                                <ListItemIcon>
+                                    <BadgeIcon fontSize="small" />
+                                </ListItemIcon>
+                                マネージャーダッシュボード
+                            </MenuItem>
+                        )}
+
                         <MenuItem
                             onClick={() => {
                                 handleCloseUserMenu();
+                                    setDmOpen(true);
+                                }}
+                            >
+                                <ListItemIcon>
+                                    <PersonIcon fontSize="small" />
+                                </ListItemIcon>
+                                ダイレクトメッセージ…
+                            </MenuItem>
+
+                            <MenuItem
+                                onClick={() => {
+                                    handleCloseUserMenu();
                                 openSettings();
                             }}
                         >
@@ -926,6 +1486,36 @@ export default function HomePage() {
                                 <SettingsIcon fontSize="small" />
                             </ListItemIcon>
                             表示設定
+                        </MenuItem>
+
+                        <MenuItem
+                            onClick={() => {
+                                handleCloseUserMenu();
+                                if (typeof window === 'undefined' || !('Notification' in window)) {
+                                    setToast({ open: true, msg: 'このブラウザはデスクトップ通知に対応していません。', sev: 'error' });
+                                    return;
+                                }
+                                if (Notification.permission === 'granted') {
+                                    setToast({ open: true, msg: '通知は既に有効です。', sev: 'info' });
+                                    return;
+                                }
+                                if (Notification.permission === 'denied') {
+                                    setToast({ open: true, msg: '通知はブラウザ設定でブロックされています。許可に変更してください。', sev: 'warning' });
+                                    return;
+                                }
+                                Notification.requestPermission().then((p) => {
+                                    if (p === 'granted') {
+                                        setToast({ open: true, msg: 'デスクトップ通知を有効化しました。', sev: 'success' });
+                                    } else {
+                                        setToast({ open: true, msg: '通知は許可されませんでした。', sev: 'info' });
+                                    }
+                                });
+                            }}
+                        >
+                            <ListItemIcon>
+                                <NotificationsActiveIcon fontSize="small" />
+                            </ListItemIcon>
+                            デスクトップ通知を有効化
                         </MenuItem>
 
                         {(isAdmin || isManager) && (
@@ -1032,6 +1622,24 @@ export default function HomePage() {
                                 const rawKey = msg.user || '';
                                 const trimmedKey = rawKey.trim();
                                 const profile = profiles[rawKey] || profiles[trimmedKey] || undefined;
+
+                                // 既読者名を抽出（可能ならID→名前へ変換）
+                                let readByNames: string[] = [];
+                                const anyMsg: any = msg as any;
+                                if (Array.isArray(anyMsg.read_by_names)) {
+                                    readByNames = anyMsg.read_by_names.filter((n: any) => typeof n === 'string') as string[];
+                                } else if (Array.isArray(anyMsg.readByNames)) {
+                                    readByNames = anyMsg.readByNames.filter((n: any) => typeof n === 'string') as string[];
+                                } else if (Array.isArray(anyMsg.read_by_ids)) {
+                                    readByNames = anyMsg.read_by_ids
+                                        .map((id: any) => allUsers.find((u) => u.id === Number(id))?.name)
+                                        .filter((n: any) => typeof n === 'string') as string[];
+                                } else if (Array.isArray(anyMsg.reads)) {
+                                    readByNames = anyMsg.reads
+                                        .map((v: any) => (typeof v === 'number' ? allUsers.find((u) => u.id === v)?.name : String(v)))
+                                        .filter((n: any) => typeof n === 'string') as string[];
+                                }
+
                                 return (
                                             <MessageItem
                                                 key={msg.id}
@@ -1045,6 +1653,7 @@ export default function HomePage() {
                                                 onCancelEdit={cancelEdit}
                                                 onCopy={(ok) => setToast({ open: true, msg: ok ? 'コードをコピーしました。' : 'コピーに失敗しました。', sev: ok ? 'success' : 'error' })}
                                                 profile={profile}
+                                                readByNames={readByNames}
                                             />
                                 );
                             })}
@@ -1056,19 +1665,52 @@ export default function HomePage() {
                 {/* 入力エリア */}
                 <MessageInput
                     value={newMessage}
-                    onChange={setNewMessage}
+                    onChange={(v) => {
+                        setNewMessage(v);
+                        // 入力変化でも検出を試行
+                        setTimeout(() => updateMentionFromCaret(), 0);
+                    }}
                     onKeyDown={handleEditorKeyDown}
                     onClickUpload={triggerFileSelect}
                     onSend={sendMessage}
                     isSending={sending}
+                    inputRef={editorRef}
+                    attachedFile={file}
+                    onAttachFile={(f) => setFile(f)}
+                    onRemoveAttachment={() => setFile(null)}
                 />
                 <input
                     type="file"
                     ref={fileInputRef}
                     hidden
-                    accept="image/*,application/pdf,.txt,.md,.csv,.json,.zip"
+                    accept="image/*,video/*,application/pdf,.txt,.md,.csv,.json,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
                     onChange={(e) => e.target.files && setFile(e.target.files[0])}
                 />
+
+                <Popper
+                    open={mentionOpen}
+                    anchorEl={editorRef.current}
+                    placement="top-start"
+                    modifiers={[
+                        { name: 'offset', options: { offset: [0, 8] } },
+                    ]}
+                    sx={{ zIndex: (t) => t.zIndex.modal + 1 }}
+                >
+                    <Paper variant="outlined" sx={{ maxHeight: 240, overflowY: 'auto', minWidth: 220 }}>
+                        <List dense>
+                            {mentionCandidates.map((u, idx) => (
+                                <ListItemButton
+                                    key={u.id}
+                                    selected={idx === mentionIndex}
+                                    onMouseDown={(e) => e.preventDefault()} // フォーカス奪取での閉じ防止
+                                    onClick={() => acceptMention(u.name)}
+                                >
+                                    <ListItemText primary={u.name} />
+                                </ListItemButton>
+                            ))}
+                        </List>
+                    </Paper>
+                </Popper>
             </Box>
 
             {/* 右下フローティングの「アクセス設定」ボタンはユーザーメニューに統合しました */}
@@ -1132,6 +1774,47 @@ export default function HomePage() {
                     >
                         保存
                     </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* DM開始ダイアログ */}
+            <Dialog open={dmOpen} onClose={() => setDmOpen(false)} fullWidth maxWidth="sm">
+                <DialogTitle>ダイレクトメッセージを開始</DialogTitle>
+                <DialogContent dividers>
+                    <Stack spacing={2}>
+                        <TextField
+                            label="ユーザー検索"
+                            placeholder="名前で検索"
+                            value={dmQuery}
+                            onChange={(e) => setDmQuery(e.target.value)}
+                            fullWidth
+                        />
+
+                        {dmLoading ? (
+                            <Stack alignItems="center" py={2}>
+                                <CircularProgress size={24} />
+                            </Stack>
+                        ) : (
+                            <List dense>
+                                {allUsers
+                                    .filter((u) => (currentUserId == null || u.id !== currentUserId))
+                                    .filter((u) => {
+                                        const q = dmQuery.trim().toLowerCase();
+                                        return q ? u.name.toLowerCase().includes(q) : true;
+                                    })
+                                    .slice(0, 30)
+                                    .map((u) => (
+                                        <ListItemButton key={u.id} onClick={() => openOrCreateDm(u.id)}>
+                                            <ListItemText primary={u.name} />
+                                        </ListItemButton>
+                                    ))
+                                }
+                            </List>
+                        )}
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDmOpen(false)}>閉じる</Button>
                 </DialogActions>
             </Dialog>
 
