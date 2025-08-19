@@ -455,7 +455,9 @@ const MessageInput: React.FC<{
     onClickUpload: () => void;
     onSend: () => void;
     isSending?: boolean;
-    inputRef?: React.RefObject<HTMLTextAreaElement>;
+    inputRef?:
+        | React.RefObject<HTMLTextAreaElement | null>
+        | React.MutableRefObject<HTMLTextAreaElement | null>;
     attachedFile?: File | null;
     onAttachFile?: (f: File) => void;
     onRemoveAttachment?: () => void;
@@ -1426,18 +1428,18 @@ export default function HomePage() {
                         <MenuItem
                             onClick={() => {
                                 handleCloseUserMenu();
-                                    setDmOpen(true);
-                                }}
-                            >
-                                <ListItemIcon>
-                                    <PersonIcon fontSize="small" />
-                                </ListItemIcon>
-                                ダイレクトメッセージ…
-                            </MenuItem>
+                                setDmOpen(true);
+                            }}
+                        >
+                            <ListItemIcon>
+                                <PersonIcon fontSize="small" />
+                            </ListItemIcon>
+                            ダイレクトメッセージ…
+                        </MenuItem>
 
-                            <MenuItem
-                                onClick={() => {
-                                    handleCloseUserMenu();
+                        <MenuItem
+                            onClick={() => {
+                                handleCloseUserMenu();
                                 openSettings();
                             }}
                         >
@@ -1600,20 +1602,20 @@ export default function HomePage() {
                                 }
 
                                 return (
-                                            <MessageItem
-                                                key={msg.id}
-                                                msg={msg}
-                                                isOwn={isOwn}
-                                                isEditing={isEditing}
-                                                editedContent={isEditing ? editedContent : (msg.content || '')}
-                                                onStartEdit={() => startEdit(msg)}
-                                                onChangeEdit={setEditedContent}
-                                                onSaveEdit={() => saveEdit(msg)}
-                                                onCancelEdit={cancelEdit}
-                                                onCopy={(ok) => setToast({ open: true, msg: ok ? 'コードをコピーしました。' : 'コピーに失敗しました。', sev: ok ? 'success' : 'error' })}
-                                                profile={profile}
-                                                readByNames={readByNames}
-                                            />
+                                    <MessageItem
+                                        key={msg.id}
+                                        msg={msg}
+                                        isOwn={isOwn}
+                                        isEditing={isEditing}
+                                        editedContent={isEditing ? editedContent : (msg.content || '')}
+                                        onStartEdit={() => startEdit(msg)}
+                                        onChangeEdit={setEditedContent}
+                                        onSaveEdit={() => saveEdit(msg)}
+                                        onCancelEdit={cancelEdit}
+                                        onCopy={(ok) => setToast({ open: true, msg: ok ? 'コードをコピーしました。' : 'コピーに失敗しました。', sev: ok ? 'success' : 'error' })}
+                                        profile={profile}
+                                        readByNames={readByNames}
+                                    />
                                 );
                             })}
                             <div ref={messagesEndRef} />
