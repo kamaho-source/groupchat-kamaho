@@ -1359,52 +1359,11 @@ export default function HomePage() {
                         <MenuIcon />
                     </IconButton>
 
-                    {/* チャンネル名ドロップダウン */}
+                    {/* チャンネル名の単純表示（ドロップダウンは削除） */}
                     <Box sx={{ flexGrow: 1 }}>
-                        <Button
-                            id="channel-menu-button"
-                            color="inherit"
-                            onClick={handleOpenChannelMenu}
-                            endIcon={<ArrowDropDownIcon />}
-                            sx={{ textTransform: 'none', fontSize: '1.1rem', fontWeight: 600, px: 0 }}
-                            aria-controls={openChannelMenu ? 'channel-menu' : undefined}
-                            aria-haspopup="true"
-                            aria-expanded={openChannelMenu ? 'true' : undefined}
-                        >
+                        <Typography variant="h6" component="div" sx={{ fontWeight: 700 }}>
                             # {currentChannelName}{isPrivateCurrent ? ' 🔒' : ''}
-                        </Button>
-
-                        <Menu
-                            id="channel-menu"
-                            anchorEl={channelMenuAnchorEl}
-                            open={openChannelMenu}
-                            onClose={handleCloseChannelMenu}
-                            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                            transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                        >
-                            {filteredChannels.map((ch) => (
-                                <MenuItem
-                                    key={ch.id}
-                                    selected={ch.id === currentChannel}
-                                    onClick={() => handleSelectChannel(ch.id)}
-                                >
-                                    # {ch.name}{ch.is_private ? ' 🔒' : ''}
-                                </MenuItem>
-                            ))}
-                            <Divider />
-                            {/* アクセス設定はユーザーメニューに移動しました */}
-                            <MenuItem
-                                onClick={() => {
-                                    handleCloseChannelMenu();
-                                    handleAddChannel();
-                                }}
-                            >
-                                <ListItemIcon>
-                                    <AddIcon fontSize="small" />
-                                </ListItemIcon>
-                                新規チャンネル
-                            </MenuItem>
-                        </Menu>
+                        </Typography>
                     </Box>
 
                     {/* ▼ ユーザー名ドロップダウン（ユーザー編集／管理者はチャンネル削除） ▼ */}
