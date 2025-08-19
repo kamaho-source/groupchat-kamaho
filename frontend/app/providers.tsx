@@ -40,6 +40,9 @@ const STORAGE_KEY = 'app-theme-settings';
 const ThemeSettingsContext = React.createContext<{
     settings: ThemeSettings;
     setSettings: React.Dispatch<React.SetStateAction<ThemeSettings>>;
+    openSettings: () => void;
+    closeSettings: () => void;
+    panelOpen: boolean;
 } | null>(null);
 
 export function useThemeSettings() {
@@ -49,8 +52,7 @@ export function useThemeSettings() {
 }
 
 function ThemeSettingsButton() {
-    const { settings, setSettings } = useThemeSettings();
-    const [open, setOpen] = React.useState(false);
+    const { settings, setSettings, panelOpen, closeSettings } = useThemeSettings();
 
     const systemPrefersDark = useMediaQuery('(prefers-color-scheme: dark)', { noSsr: true });
 
@@ -69,30 +71,12 @@ function ThemeSettingsButton() {
 
     return (
         <>
-            {/* 右下の小さな設定ボタン（全ページ共通） */}
-            <IconButton
-                aria-label="テーマ設定"
-                onClick={() => setOpen(true)}
-                sx={{
-                    position: 'fixed',
-                    right: 16,
-                    bottom: 16,
-                    zIndex: (t) => t.zIndex.drawer + 1,
-                    bgcolor: 'background.paper',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    boxShadow: 2,
-                    '&:hover': { bgcolor: 'background.paper' },
-                }}
-            >
-                <SettingsIcon />
-            </IconButton>
-
-            <Drawer anchor="right" open={open} onClose={() => setOpen(false)}>
+            {/* 設定ドロワー（全ページ共通） */}
+            <Drawer anchor="right" open={panelOpen} onClose={closeSettings}>
                 <Box sx={{ width: 360, p: 2 }}>
                     <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
                         <Typography variant="h6">表示設定</Typography>
-                        <IconButton onClick={() => setOpen(false)} aria-label="閉じる">
+                        <IconButton onClick={closeSettings} aria-label="閉じる">
                             <CloseIcon />
                         </IconButton>
                     </Stack>
@@ -190,6 +174,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     // 設定の復元
     const [settings, setSettings] = React.useState<ThemeSettings>(DEFAULT_SETTINGS);
     const [ready, setReady] = React.useState(false);
+    const [panelOpen, setPanelOpen] = React.useState(false);
 
     React.useEffect(() => {
         try {
@@ -239,12 +224,20 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     );
 
     return (
-        <ThemeSettingsContext.Provider value={{ settings, setSettings }}>
+        <ThemeSettingsContext.Provider
+            value={{
+                settings,
+                setSettings,
+                openSettings: () => setPanelOpen(true),
+                closeSettings: () => setPanelOpen(false),
+                panelOpen,
+            }}
+        >
             <ThemeProvider theme={theme}>
                 {/* OS 連動は行わないため enableColorScheme は false に */}
                 <CssBaseline enableColorScheme={false} />
                 {children}
-                {/* グローバル設定ボタン */}
+                {/* 設定ドロワー */}
                 {ready && <ThemeSettingsButton />}
             </ThemeProvider>
         </ThemeSettingsContext.Provider>

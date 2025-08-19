@@ -5,7 +5,8 @@ import {
     AppBar, Toolbar, Typography, IconButton, Drawer, List, ListItemButton, ListItemText,
     Box, Stack, Divider, Button, TextField, Avatar, Paper, useMediaQuery, Tooltip,
     Snackbar, Alert, CircularProgress, Menu, MenuItem, ListItemIcon,
-    Dialog, DialogTitle, DialogContent, DialogActions, FormGroup, FormControlLabel, Checkbox, Switch, Chip
+    Dialog, DialogTitle, DialogContent, DialogActions, FormGroup, FormControlLabel, Checkbox, Switch, Chip,
+    Collapse
 } from '@mui/material';
 import {
     Send as SendIcon,
@@ -20,6 +21,9 @@ import {
     ArrowDropDown as ArrowDropDownIcon,
     DeleteForever as DeleteForeverIcon,
     AccountCircle as AccountCircleIcon,
+    Settings as SettingsIcon,
+    ExpandLess as ExpandLessIcon,
+    ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import FolderIcon from '@mui/icons-material/Folder';
 import PersonIcon from '@mui/icons-material/Person';
@@ -36,6 +40,7 @@ import dynamic from 'next/dynamic';
 import remarkGfm from 'remark-gfm';
 import axios from '@/lib/axios';
 import ChannelPrivacySelector from '@/components/ChannelPrivacySelector';
+import { useThemeSettings } from '@/app/providers';
 
 const ReactMarkdownLazy = dynamic(() => import('react-markdown'), { ssr: false });
 
@@ -298,22 +303,33 @@ const ChannelList: React.FC<{
     onAdd: () => void;
     onLogout: () => void;
 }> = ({ channels, currentChannel, onSelect, onAdd, onLogout }) => {
+    const [openChannels, setOpenChannels] = useState(true);
     return (
         <Box role="navigation" sx={{ width: DRAWER_WIDTH }}>
             <Toolbar>
                 <Typography variant="h6" noWrap>鎌倉児童ホーム</Typography>
             </Toolbar>
             <Divider />
-            <List dense>
-                {channels.map((ch) => (
-                    <ListItemButton
-                        key={ch.id}
-                        selected={ch.id === currentChannel}
-                        onClick={() => onSelect(ch.id)}
-                    >
-                        <ListItemText primary={`# ${ch.name}${ch.is_private ? ' 🔒' : ''}`} />
-                    </ListItemButton>
-                ))}
+            <List disablePadding>
+                <ListItemButton onClick={() => setOpenChannels(v => !v)}>
+                    <ListItemText primary="チャンネル" />
+                    {openChannels ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                </ListItemButton>
+
+                <Collapse in={openChannels} timeout="auto" unmountOnExit>
+                    <List dense component="div" disablePadding>
+                        {channels.map((ch) => (
+                            <ListItemButton
+                                key={ch.id}
+                                selected={ch.id === currentChannel}
+                                onClick={() => onSelect(ch.id)}
+                                sx={{ pl: 3 }}
+                            >
+                                <ListItemText primary={`# ${ch.name}${ch.is_private ? ' 🔒' : ''}`} />
+                            </ListItemButton>
+                        ))}
+                    </List>
+                </Collapse>
             </List>
             <Box px={2} py={1}>
                 <Stack direction="row" spacing={1}>
@@ -376,10 +392,33 @@ const MessageInput: React.FC<{
 export default function HomePage() {
     const router = useRouter();
     const pathname = usePathname();
+    const { openSettings } = useThemeSettings();
 
     // UI（SSR差を避けるため noSsr 指定）
     const isUpMd = useMediaQuery('(min-width:900px)', { noSsr: true });
     const [mobileOpen, setMobileOpen] = useState(false);
+    // デスクトップ用サイドバー開閉
+    const [sidebarOpen, setSidebarOpen] = useState(true);
+
+    // サイドバー開閉状態をデスクトップ時に永続化（保存/復元）
+    useEffect(() => {
+        if (!isUpMd) return;
+        try {
+            const saved = localStorage.getItem('sidebarOpen');
+            if (saved !== null) setSidebarOpen(saved === '1');
+        } catch {
+            // noop
+        }
+    }, [isUpMd]);
+
+    useEffect(() => {
+        if (!isUpMd) return;
+        try {
+            localStorage.setItem('sidebarOpen', sidebarOpen ? '1' : '0');
+        } catch {
+            // noop
+        }
+    }, [isUpMd, sidebarOpen]);
 
     // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -785,11 +824,20 @@ export default function HomePage() {
             {/* AppBar */}
             <AppBar position="fixed" color="default" sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
                 <Toolbar>
-                    {!isUpMd && (
-                        <IconButton edge="start" onClick={() => setMobileOpen(v => !v)} sx={{ mr: 1 }} aria-label="チャンネルメニューを開く">
-                            <MenuIcon />
-                        </IconButton>
-                    )}
+                    <IconButton
+                        edge="start"
+                        onClick={() => {
+                            if (isUpMd) {
+                                setSidebarOpen(v => !v);
+                            } else {
+                                setMobileOpen(v => !v);
+                            }
+                        }}
+                        sx={{ mr: 1 }}
+                        aria-label="サイドバーを開閉"
+                    >
+                        <MenuIcon />
+                    </IconButton>
 
                     {/* チャンネル名ドロップダウン */}
                     <Box sx={{ flexGrow: 1 }}>
@@ -824,32 +872,7 @@ export default function HomePage() {
                                 </MenuItem>
                             ))}
                             <Divider />
-                            {(isAdmin || isManager) && (
-                                <MenuItem
-                                    onClick={async () => {
-                                        handleCloseChannelMenu();
-                                        // 初期ロード
-                                        try {
-                                            setPrivacyOpen(true);
-                                            // 現在の設定
-                                            const res = await axios.get(`/api/channels/${currentChannel}/members`);
-                                            setPrivacyIsPrivate(Boolean(res.data?.is_private));
-                                            setPrivacyMemberIds((res.data?.member_ids || []).map((n: any) => Number(n)));
-                                            // ユーザー一覧（必要なら取得）
-                                            if (allUsers.length === 0) {
-                                                const ures = await axios.get('/api/users');
-                                                const list = (ures.data as any[]).map(u => ({ id: Number(u.id), name: u.name }));
-                                                setAllUsers(list);
-                                            }
-                                        } catch {
-                                            setToast({ open: true, msg: 'アクセス設定の取得に失敗しました。', sev: 'error' });
-                                            setPrivacyOpen(false);
-                                        }
-                                    }}
-                                >
-                                    アクセス設定…
-                                </MenuItem>
-                            )}
+                            {/* アクセス設定はユーザーメニューに移動しました */}
                             <MenuItem
                                 onClick={() => {
                                     handleCloseChannelMenu();
@@ -859,7 +882,7 @@ export default function HomePage() {
                                 <ListItemIcon>
                                     <AddIcon fontSize="small" />
                                 </ListItemIcon>
-                                新規チャンネル…
+                                新規チャンネル
                             </MenuItem>
                         </Menu>
                     </Box>
@@ -892,6 +915,33 @@ export default function HomePage() {
                             </ListItemIcon>
                             ユーザー編集
                         </MenuItem>
+
+                        <MenuItem
+                            onClick={() => {
+                                handleCloseUserMenu();
+                                openSettings();
+                            }}
+                        >
+                            <ListItemIcon>
+                                <SettingsIcon fontSize="small" />
+                            </ListItemIcon>
+                            表示設定
+                        </MenuItem>
+
+                        {(isAdmin || isManager) && (
+                            <MenuItem
+                                onClick={async () => {
+                                    handleCloseUserMenu();
+                                    await openPrivacyDialog();
+                                }}
+                            >
+                                <ListItemIcon>
+                                    <BuildIcon fontSize="small" />
+                                </ListItemIcon>
+                                アクセス設定
+                            </MenuItem>
+                        )}
+
                         <Divider />
                         <MenuItem onClick={handleDeleteCurrentChannel} disabled={!canDeleteChannel}>
                             <ListItemIcon>
@@ -905,7 +955,19 @@ export default function HomePage() {
             </AppBar>
 
             {/* Left Drawer */}
-            <Box component="nav" sx={{ width: { md: DRAWER_WIDTH }, flexShrink: { md: 0 } }} aria-label="channels">
+            <Box
+                component="nav"
+                sx={{
+                    width: { md: sidebarOpen ? DRAWER_WIDTH : 0 },
+                    flexShrink: { md: 0 },
+                    transition: (theme) =>
+                        theme.transitions.create('width', {
+                            easing: theme.transitions.easing.sharp,
+                            duration: theme.transitions.duration.enteringScreen,
+                        }),
+                }}
+                aria-label="channels"
+            >
                 {/* Mobile */}
                 <Drawer
                     variant="temporary"
@@ -921,12 +983,12 @@ export default function HomePage() {
                 </Drawer>
                 {/* Desktop */}
                 <Drawer
-                    variant="permanent"
+                    variant="persistent"
+                    open={sidebarOpen}
                     sx={{
                         display: { xs: 'none', md: 'block' },
                         '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box' }
                     }}
-                    open
                 >
                     {drawerContent}
                 </Drawer>
@@ -950,7 +1012,7 @@ export default function HomePage() {
                                 })
                             )}
                             <Box sx={{ ml: 'auto' }}>
-                                <Button size="small" onClick={openPrivacyDialog}>アクセス設定…</Button>
+                                <Button size="small" onClick={openPrivacyDialog}>アクセス設定</Button>
                             </Box>
                         </Paper>
                     </Box>
@@ -1008,6 +1070,8 @@ export default function HomePage() {
                     onChange={(e) => e.target.files && setFile(e.target.files[0])}
                 />
             </Box>
+
+            {/* 右下フローティングの「アクセス設定」ボタンはユーザーメニューに統合しました */}
 
             {/* アクセス設定ダイアログ */}
             <Dialog open={privacyOpen} onClose={() => setPrivacyOpen(false)} fullWidth maxWidth="sm">
