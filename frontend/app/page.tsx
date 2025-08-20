@@ -25,6 +25,7 @@ import {
     NotificationsActive as NotificationsActiveIcon,
     ExpandLess as ExpandLessIcon,
     ExpandMore as ExpandMoreIcon,
+    LockReset as LockResetIcon,
 } from '@mui/icons-material';
 import FolderIcon from '@mui/icons-material/Folder';
 import PersonIcon from '@mui/icons-material/Person';
@@ -1233,6 +1234,73 @@ export default function HomePage() {
         }
     };
 
+    // ▼ 管理者専用: パスワード変更 ▼
+    const [adminPwOpen, setAdminPwOpen] = useState(false);
+    const [adminPwLoading, setAdminPwLoading] = useState(false);
+    const [adminPwSubmitting, setAdminPwSubmitting] = useState(false);
+    const [adminPwUsers, setAdminPwUsers] = useState<Array<{ id: number; name: string; role: string }>>([]);
+    const [adminPwTargetId, setAdminPwTargetId] = useState<number | ''>('');
+    const [adminPw, setAdminPw] = useState('');
+    const [adminPwConfirm, setAdminPwConfirm] = useState('');
+
+    const openAdminPwDialog = async () => {
+        setAdminPwOpen(true);
+        setAdminPwTargetId('');
+        setAdminPw('');
+        setAdminPwConfirm('');
+        setAdminPwLoading(true);
+        try {
+            const res = await axios.get('/api/users', { params: { _: Date.now() } });
+            const list = (res.data as any[])
+                .map(u => ({
+                    id: Number(u.id),
+                    name: String(u.name),
+                    role: String(u.role || ''),
+                }))
+                .filter(u => u.role === 'member' || u.role === 'manager');
+            setAdminPwUsers(list);
+        } catch {
+            setToast({ open: true, msg: 'ユーザー一覧の取得に失敗しました。', sev: 'error' });
+            setAdminPwOpen(false);
+        } finally {
+            setAdminPwLoading(false);
+        }
+    };
+
+    const submitAdminPw = async () => {
+        if (!adminPwTargetId) {
+            setToast({ open: true, msg: '対象ユーザーを選択してください。', sev: 'warning' });
+            return;
+        }
+        if (adminPw.length < 8) {
+            setToast({ open: true, msg: '新しいパスワードは8文字以上で入力してください。', sev: 'warning' });
+            return;
+        }
+        if (adminPw !== adminPwConfirm) {
+            setToast({ open: true, msg: 'パスワードが一致しません。', sev: 'warning' });
+            return;
+        }
+        setAdminPwSubmitting(true);
+        try {
+            await axios.put(`/api/users/${adminPwTargetId}/password`, {
+                new_password: adminPw,
+                new_password_confirmation: adminPwConfirm,
+            });
+            setToast({ open: true, msg: 'パスワードを更新しました。', sev: 'success' });
+            setAdminPwOpen(false);
+        } catch (e: any) {
+            const apiMsg = e?.response?.data?.message;
+            const errs = e?.response?.data?.errors;
+            const firstErr = errs ? (() => {
+                const k = Object.keys(errs)[0];
+                return Array.isArray(errs[k]) ? errs[k][0] : undefined;
+            })() : undefined;
+            setToast({ open: true, msg: firstErr || apiMsg || '更新に失敗しました。', sev: 'error' });
+        } finally {
+            setAdminPwSubmitting(false);
+        }
+    };
+
     // ▼ DM（ダイレクトメッセージ）関連 ▼
     const [dmOpen, setDmOpen] = useState(false);
     const [dmQuery, setDmQuery] = useState('');
@@ -1424,6 +1492,22 @@ export default function HomePage() {
                                     <BadgeIcon fontSize="small" />
                                 </ListItemIcon>
                                 マネージャーダッシュボード
+                            </MenuItem>
+                        )}
+
+                        {isAdmin && <MenuItem disabled>管理者専用</MenuItem>}
+
+                        {isAdmin && (
+                            <MenuItem
+                                onClick={() => {
+                                    handleCloseUserMenu();
+                                    void openAdminPwDialog();
+                                }}
+                            >
+                                <ListItemIcon>
+                                    <LockResetIcon fontSize="small" />
+                                </ListItemIcon>
+                                パスワード変更…
                             </MenuItem>
                         )}
 
@@ -1778,6 +1862,59 @@ export default function HomePage() {
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setDmOpen(false)}>閉じる</Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* 管理者専用: パスワード変更ダイアログ */}
+            <Dialog open={adminPwOpen} onClose={() => setAdminPwOpen(false)} fullWidth maxWidth="sm">
+                <DialogTitle>パスワード変更（管理者専用）</DialogTitle>
+                <DialogContent dividers>
+                    <Stack spacing={2}>
+                        <Typography variant="body2" color="text.secondary">
+                            対象はメンバー/マネージャーのみです。
+                        </Typography>
+
+                        <TextField
+                            select
+                            label="対象ユーザー"
+                            value={adminPwTargetId}
+                            onChange={(e) => setAdminPwTargetId(Number(e.target.value) || '')}
+                            fullWidth
+                            disabled={adminPwLoading}
+                        >
+                            {adminPwUsers.map((u) => (
+                                <MenuItem key={u.id} value={u.id}>
+                                    {u.name}（{u.role}）
+                                </MenuItem>
+                            ))}
+                        </TextField>
+
+                        <TextField
+                            label="新しいパスワード"
+                            type="password"
+                            value={adminPw}
+                            onChange={(e) => setAdminPw(e.target.value)}
+                            fullWidth
+                            helperText="8文字以上"
+                        />
+                        <TextField
+                            label="新しいパスワード（確認）"
+                            type="password"
+                            value={adminPwConfirm}
+                            onChange={(e) => setAdminPwConfirm(e.target.value)}
+                            fullWidth
+                        />
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setAdminPwOpen(false)} disabled={adminPwSubmitting}>キャンセル</Button>
+                    <Button
+                        variant="contained"
+                        onClick={submitAdminPw}
+                        disabled={adminPwSubmitting || adminPwLoading}
+                    >
+                        更新
+                    </Button>
                 </DialogActions>
             </Dialog>
 

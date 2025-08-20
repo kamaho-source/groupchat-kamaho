@@ -177,7 +177,7 @@ class UserController extends Controller
 
     /**
      * PUT /api/users/{user}/password
-     * 管理者/マネージャーのみ、対象ユーザーのパスワードを更新。
+     * 管理者のみ、対象がメンバーまたはマネージャーの場合にパスワードを更新。
      */
     public function updatePassword(Request $request, User $user): JsonResponse
     {
@@ -185,8 +185,13 @@ class UserController extends Controller
         if (!$actor) {
             abort(401);
         }
-        if (!$this->isAdminOrManager($actor)) {
+        // 管理者のみ許可
+        if ($actor->role !== 'admin') {
             abort(403, 'パスワード更新権限がありません');
+        }
+        // 対象はメンバー/マネージャーに限定（管理者のパスワードは変更不可）
+        if (!in_array($user->role, ['member', 'manager'], true)) {
+            abort(403, 'このユーザーのパスワードは変更できません');
         }
 
         $data = $request->validate([

@@ -69,7 +69,7 @@ const ICON_OPTIONS = [
 ] as const
 
 // -----------------------------
-// Component（編集ページ: メール未使用 / パスワードは管理者・マネージャーのみ）
+// Component（編集ページ: メール未使用 / パスワードは管理者のみ・対象がメンバー/マネージャーの場合）
 // -----------------------------
 
 export default function EditUserPage() {
@@ -85,7 +85,7 @@ export default function EditUserPage() {
 
     // 現在ユーザーのロール（パスワード権限制御に使用）
     const [currentUserRole, setCurrentUserRole] = useState<Role | null>(null)
-    const canChangePassword = currentUserRole === 'admin' || currentUserRole === 'manager'
+    const canChangePassword = currentUserRole === 'admin' && (role === 'member' || role === 'manager')
 
     // パスワード変更（管理者・マネージャーのみ、任意）
     const [password, setPassword] = useState('')               // 任意（空なら変更しない）
@@ -269,10 +269,10 @@ export default function EditUserPage() {
 
                                 {/* 権限（アプリ独自） */}
                                 <FormControl fullWidth>
-                                    <InputLabel id="role-select-label">権限ロール</InputLabel>
+                                    <InputLabel id="role-select-label">権限ロール（管理者専用）</InputLabel>
                                     <Select
                                         labelId="role-select-label"
-                                        label="権限ロール"
+                                        label="権限ロール（管理者専用）"
                                         value={role}
                                         onChange={(e: SelectChangeEvent<Role>) => setRole(e.target.value as Role)}
                                     >
