@@ -50,12 +50,13 @@ class ChannelPrivacyController extends Controller
         ]);
     }
 
-    // プライバシー設定の更新（管理者/マネージャー専用）
+    // プライバシー設定の更新
+    // - 管理者/マネージャー: 従来どおり更新可
+    // - DMチャンネル（dm:<small>-<big>）: 当事者のどちらかで、かつ member_ids がその2名のみ・is_private=true の場合に限り一般ユーザーも更新可
     public function updatePrivacy(Request $request, $channelId): JsonResponse
     {
         $actor = $request->user();
         if (!$actor) abort(401);
-        if (!in_array($actor->role ?? null, ['admin', 'manager'], true)) abort(403);
 
         $data = $request->validate([
             'is_private'  => ['required', 'boolean'],
@@ -63,8 +64,36 @@ class ChannelPrivacyController extends Controller
             'member_ids.*'=> ['integer', 'exists:users,id'],
         ]);
 
-        $ch = DB::table('channels')->where('id', $channelId)->first(['id']);
+        // 対象チャンネル取得（DM名判定用に name も取得）
+        $ch = DB::table('channels')->where('id', $channelId)->first(['id', 'name']);
         if (!$ch) abort(404);
+
+        $roleAllowed = in_array($actor->role ?? null, ['admin', 'manager'], true);
+
+        // 非管理者の場合、DM 当事者のみの限定許可
+        if (!$roleAllowed) {
+            $isDm = false;
+            $a = null; $b = null;
+            if (is_string($ch->name) && preg_match('/^dm:(\d+)-(\d+)$/', $ch->name, $m)) {
+                $x = (int)$m[1];
+                $y = (int)$m[2];
+                $a = min($x, $y);
+                $b = max($x, $y);
+                $isDm = true;
+            }
+
+            // DM ではない、または actor が当事者ではない → 拒否
+            if (!$isDm || !in_array((int)$actor->id, [$a, $b], true)) {
+                abort(403);
+            }
+
+            // DM は非公開固定、かつメンバーは当事者2名のみ
+            $ids = array_map('intval', $data['member_ids'] ?? []);
+            sort($ids);
+            if (!$data['is_private'] || count($ids) !== 2 || $ids[0] !== $a || $ids[1] !== $b) {
+                abort(403);
+            }
+        }
 
         DB::table('channels')->where('id', $channelId)->update(['is_private' => $data['is_private'] ? 1 : 0]);
 
