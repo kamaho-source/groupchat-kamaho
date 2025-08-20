@@ -196,10 +196,10 @@ export default function NewUserPage() {
 
                             {/* 役割 */}
                             <FormControl fullWidth>
-                                <InputLabel id="role-select-label">権限ロール</InputLabel>
+                                <InputLabel id="role-select-label">権限ロール（管理者専用）</InputLabel>
                                 <Select
                                     labelId="role-select-label"
-                                    label="権限ロール"
+                                    label="権限ロール（管理者専用）"
                                     value={role}
                                     onChange={(e: SelectChangeEvent<Role>) => setRole(e.target.value as Role)}
                                 >

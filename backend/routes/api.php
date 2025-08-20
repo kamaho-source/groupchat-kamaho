@@ -36,7 +36,7 @@ Route::middleware([
     Route::get('users/{user}', [UserController::class, 'show']);
     Route::put('users/{user}', [UserController::class, 'update']);               // JSON（画像なし）
     Route::post('users/{user}', [UserController::class, 'updateWithAvatar']);    // multipart（画像あり）
-    Route::put('users/{user}/password', [UserController::class, 'updatePassword']); // 管理者/マネージャーのみ
+    Route::put('users/{user}/password', [UserController::class, 'updatePassword']); // 管理者のみ（対象はメンバー/マネージャー）
 
     // チャンネル一覧（権限に応じた結果のみ。resource より先に定義して上書き）
     Route::get('channels', [ChannelPrivacyController::class, 'index']);
