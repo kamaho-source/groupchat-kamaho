@@ -1018,10 +1018,21 @@ export default function HomePage() {
             const res = await axios.get(`/api/channels/${channelId}/messages`);
             const data = res.data as Message[];
             setMessages((prev) => {
-                if (prev.length === data.length) {
-                    const prevLast = prev[prev.length - 1]?.id;
-                    const nextLast = data[data.length - 1]?.id;
-                    if (prevLast === nextLast) return prev; // 変更なし
+                // 長さと末尾IDだけでは「編集による内容変更」を検出できないため、簡易的に各要素を比較
+                const sameLength = prev.length === data.length;
+                if (sameLength) {
+                    let identical = true;
+                    for (let i = 0; i < data.length; i++) {
+                        const a: any = prev[i];
+                        const b: any = data[i];
+                        if (!a || !b) { identical = false; break; }
+                        if (a.id !== b.id) { identical = false; break; }
+                        // 主要フィールドの差分を検出（必要に応じて追加）
+                        if (a.content !== b.content || a.file_url !== b.file_url || a.file_name !== b.file_name || a.mime_type !== b.mime_type) {
+                            identical = false; break;
+                        }
+                    }
+                    if (identical) return prev;
                 }
                 return data;
             });
@@ -1213,13 +1224,33 @@ export default function HomePage() {
     };
 
     const saveEdit = async (msg: Message) => {
+        const targetId = msg.id;
+        const nextContent = editedContent;
+
+        // 1) 楽観的更新（即時にUIへ反映）
+        let prevSnapshot: Message[] = [];
+        setMessages((cur) => {
+            prevSnapshot = cur;
+            return cur.map((m) => (m.id === targetId ? { ...m, content: nextContent } : m));
+        });
+
         try {
-            await axios.put(`/api/channels/${currentChannel}/messages/${msg.id}`, { content: editedContent });
-            setEditingMessageId(null);
-            await fetchMessages(currentChannel);
+            // 2) API 呼び出し
+            const res = await axios.put(`/api/channels/${currentChannel}/messages/${targetId}`, { content: nextContent });
+            const updated = res.data;
+
+            // 3) 応答内容で確定反映（サーバ側で更新されたメタも適用）
+            setMessages((cur) => cur.map((m) => (m.id === targetId ? { ...m, ...updated } : m)));
             setToast({ open: true, msg: 'メッセージを更新しました。', sev: 'success' });
         } catch {
+            // 4) 失敗時はロールバック
+            if (prevSnapshot) setMessages(prevSnapshot);
             setToast({ open: true, msg: '更新に失敗しました。', sev: 'error' });
+        } finally {
+            setEditingMessageId(null);
+            setEditedContent('');
+            // 裏で最新を再取得して最終整合（失敗してもUIは維持）
+            fetchMessages(currentChannel).catch(() => {});
         }
     };
 
