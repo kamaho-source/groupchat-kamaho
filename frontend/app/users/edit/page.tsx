@@ -223,9 +223,15 @@ export default function EditUserPage() {
                 })
             }
 
-            setSnack({ open: true, message: 'ユーザー情報を更新しました。', severity: 'success' })
+            setSnack({ open: true, message: '修正が完了しました。', severity: 'success' })
             setPassword('')
             setPasswordConfirm('')
+
+            // 成功したのでポップアップ表示後にホームへ戻る
+            setTimeout(() => {
+                router.push('/')
+            }, 1200)
+            return
         } catch (err: any) {
             const apiMsg = err?.response?.data?.message
             const firstErr = (() => {
