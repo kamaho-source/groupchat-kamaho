@@ -28,6 +28,7 @@ import {
     LockReset as LockResetIcon,
     Visibility as VisibilityIcon,
     VisibilityOff as VisibilityOffIcon,
+    ChevronLeft as ChevronLeftIcon,
 } from '@mui/icons-material';
 import FolderIcon from '@mui/icons-material/Folder';
 import PersonIcon from '@mui/icons-material/Person';
@@ -387,7 +388,8 @@ const ChannelList: React.FC<{
     onLogout: () => void;
     allUsers: Array<{ id: number; name: string }>;
     currentUserId: number | null;
-}> = ({ channels, currentChannel, onSelect, onAdd, onLogout, allUsers, currentUserId }) => {
+    onCloseSidebar?: () => void;
+}> = ({ channels, currentChannel, onSelect, onAdd, onLogout, allUsers, currentUserId, onCloseSidebar }) => {
     const [openChannels, setOpenChannels] = useState(true);
 
     const renderLabel = (ch: Channel) => {
@@ -410,6 +412,14 @@ const ChannelList: React.FC<{
         <Box role="navigation" sx={{ width: DRAWER_WIDTH }}>
             <Toolbar>
                 <Typography variant="h6" noWrap>鎌倉児童ホーム</Typography>
+                <IconButton
+                    size="small"
+                    onClick={() => onCloseSidebar && onCloseSidebar()}
+                    aria-label="サイドバーを閉じる"
+                    sx={{ ml: 'auto', display: { xs: 'none', md: 'inline-flex' } }}
+                >
+                    <ChevronLeftIcon fontSize="small" />
+                </IconButton>
             </Toolbar>
             <Divider />
             <List disablePadding>
@@ -1396,6 +1406,7 @@ export default function HomePage() {
             onLogout={handleLogout}
             allUsers={allUsers}
             currentUserId={currentUserId}
+            onCloseSidebar={() => setSidebarOpen(false)}
         />
     );
 
@@ -1423,14 +1434,12 @@ export default function HomePage() {
                     <IconButton
                         edge="start"
                         onClick={() => {
-                            if (isUpMd) {
-                                setSidebarOpen(v => !v);
-                            } else {
-                                setMobileOpen(v => !v);
-                            }
+                            // PCでも一時ドロワー（モバイル用）を開く
+                            setSidebarOpen(false);
+                            setMobileOpen(v => !v);
                         }}
                         sx={{ mr: 1 }}
-                        aria-label="サイドバーを開閉"
+                        aria-label="メニューを開閉"
                     >
                         <MenuIcon />
                     </IconButton>
@@ -1616,7 +1625,7 @@ export default function HomePage() {
                     onClose={() => setMobileOpen(false)}
                     ModalProps={{ keepMounted: true }}
                     sx={{
-                        display: { xs: 'block', md: 'none' },
+                        display: 'block',
                         '& .MuiDrawer-paper': { width: DRAWER_WIDTH }
                     }}
                 >

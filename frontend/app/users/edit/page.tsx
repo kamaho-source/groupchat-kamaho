@@ -86,6 +86,7 @@ export default function EditUserPage() {
     // 現在ユーザーのロール（パスワード権限制御に使用）
     const [currentUserRole, setCurrentUserRole] = useState<Role | null>(null)
     const canChangePassword = currentUserRole === 'admin' && (role === 'member' || role === 'manager')
+    const canChangeRole = currentUserRole === 'admin' || currentUserRole === 'manager'
 
     // パスワード変更（管理者・マネージャーのみ、任意）
     const [password, setPassword] = useState('')               // 任意（空なら変更しない）
@@ -201,11 +202,17 @@ export default function EditUserPage() {
             if (iconFile) {
                 const form = new FormData()
                 form.append('name', fullName)
-                form.append('role', role)
+                if (canChangeRole) {
+                    form.append('role', role)
+                }
                 form.append('avatar', iconFile)
                 await axios.post(`/api/users/${recordId}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
             } else {
-                await axios.put(`/api/users/${recordId}`, { name: fullName, role, icon_name: iconName || null })
+                const payload: any = { name: fullName, icon_name: iconName || null }
+                if (canChangeRole) {
+                    payload.role = role
+                }
+                await axios.put(`/api/users/${recordId}`, payload)
             }
 
             // 2) パスワード変更（管理者・マネージャーのみ、入力がある時）
