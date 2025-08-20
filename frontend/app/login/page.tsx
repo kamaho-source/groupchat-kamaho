@@ -33,12 +33,16 @@ export default function LoginPage() {
     const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [showPwd, setShowPwd] = useState(false);
+    const [mounted, setMounted] = useState(false);
 
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        axios.get('/sanctum/csrf-cookie').catch(console.error);
+        axios
+            .get('/sanctum/csrf-cookie')
+            .catch(console.error)
+            .finally(() => setMounted(true));
     }, []);
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -67,6 +71,8 @@ export default function LoginPage() {
             setLoading(false);
         }
     };
+
+    if (!mounted) return null;
 
     return (
         <Container maxWidth="xs">
