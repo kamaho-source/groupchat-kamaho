@@ -6,7 +6,7 @@ import {
     Box, Stack, Divider, Button, TextField, Avatar, Paper, useMediaQuery, Tooltip,
     Snackbar, Alert, CircularProgress, Menu, MenuItem, ListItemIcon,
     Dialog, DialogTitle, DialogContent, DialogActions, FormGroup, FormControlLabel, Checkbox, Switch, Chip,
-    Collapse, Popper
+    Collapse, Popper, InputAdornment
 } from '@mui/material';
 import {
     Send as SendIcon,
@@ -26,6 +26,8 @@ import {
     ExpandLess as ExpandLessIcon,
     ExpandMore as ExpandMoreIcon,
     LockReset as LockResetIcon,
+    Visibility as VisibilityIcon,
+    VisibilityOff as VisibilityOffIcon,
 } from '@mui/icons-material';
 import FolderIcon from '@mui/icons-material/Folder';
 import PersonIcon from '@mui/icons-material/Person';
@@ -1242,6 +1244,8 @@ export default function HomePage() {
     const [adminPwTargetId, setAdminPwTargetId] = useState<number | ''>('');
     const [adminPw, setAdminPw] = useState('');
     const [adminPwConfirm, setAdminPwConfirm] = useState('');
+    const [adminPwShow, setAdminPwShow] = useState(false);
+    const [adminPwShowConfirm, setAdminPwShowConfirm] = useState(false);
 
     const openAdminPwDialog = async () => {
         setAdminPwOpen(true);
@@ -1891,18 +1895,44 @@ export default function HomePage() {
 
                         <TextField
                             label="新しいパスワード"
-                            type="password"
+                            type={adminPwShow ? 'text' : 'password'}
                             value={adminPw}
                             onChange={(e) => setAdminPw(e.target.value)}
                             fullWidth
                             helperText="8文字以上"
+                            InputProps={{
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        <IconButton
+                                            onClick={() => setAdminPwShow((v) => !v)}
+                                            edge="end"
+                                            aria-label="パスワード表示切替"
+                                        >
+                                            {adminPwShow ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                                        </IconButton>
+                                    </InputAdornment>
+                                ),
+                            }}
                         />
                         <TextField
                             label="新しいパスワード（確認）"
-                            type="password"
+                            type={adminPwShowConfirm ? 'text' : 'password'}
                             value={adminPwConfirm}
                             onChange={(e) => setAdminPwConfirm(e.target.value)}
                             fullWidth
+                            InputProps={{
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        <IconButton
+                                            onClick={() => setAdminPwShowConfirm((v) => !v)}
+                                            edge="end"
+                                            aria-label="確認用パスワード表示切替"
+                                        >
+                                            {adminPwShowConfirm ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                                        </IconButton>
+                                    </InputAdornment>
+                                ),
+                            }}
                         />
                     </Stack>
                 </DialogContent>
