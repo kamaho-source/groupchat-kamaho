@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Channel;
 use Illuminate\Http\Request;
 use App\Models\Message;
+use App\Events\MessageUpdated;
+use Illuminate\Support\Facades\Log;
 
 class MessageController extends Controller
 {
@@ -62,6 +64,18 @@ class MessageController extends Controller
 
         $message->content = $request->input('content');
         $message->save();
+        $message->refresh();
+
+        // ブロードキャストに失敗しても API を 500 にしない
+        try {
+            broadcast(new MessageUpdated($message));
+        } catch (\Throwable $e) {
+            Log::error('MessageUpdated broadcast failed', [
+                'message_id' => $message->id,
+                'channel_id' => $message->channel_id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return response()->json($message);
     }
