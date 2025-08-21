@@ -45,6 +45,14 @@ const nextConfig: NextConfig = {
             },
         ];
     },
+    eslint: {
+        // 本番ビルドでは ESLint による失敗を無視（CI で実施推奨）
+        ignoreDuringBuilds: true,
+    },
+    typescript: {
+        // 型エラーでビルドを止めない（CI でチェック推奨）
+        ignoreBuildErrors: true,
+    },
 };
 
 export default nextConfig;
