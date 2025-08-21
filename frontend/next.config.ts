@@ -1,6 +1,6 @@
 import { NextConfig } from 'next';
 
-const HOST = 'http://host.docker.internal:8000';
+const HOST = 'http://groupchat-kamaho-app';
 
 const nextConfig: NextConfig = {
     async rewrites() {

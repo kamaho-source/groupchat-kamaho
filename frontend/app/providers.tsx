@@ -17,9 +17,12 @@ import {
     ToggleButton,
     TextField,
     Button,
+    Snackbar,
+    Alert,
 } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import CloseIcon from '@mui/icons-material/Close';
+import axios from '@/lib/axios';
 
 type ModeSetting = 'light' | 'dark' | 'system';
 
@@ -170,6 +173,49 @@ function ThemeSettingsButton() {
     );
 }
 
+// チャンネル関連APIで403が返ったときにグローバルでトーストを出す
+function AxiosPermissionToast() {
+    const [open, setOpen] = React.useState(false);
+    const [msg, setMsg] = React.useState('あなたには閲覧権限がありません');
+
+    React.useEffect(() => {
+        const resInterceptor = axios.interceptors.response.use(
+            (res) => res,
+            (error) => {
+                try {
+                    const status = error?.response?.status;
+                    const url: string = error?.config?.url || '';
+                    const isChannelApi = typeof url === 'string' && /\/api\/channels(\/|$)/.test(url);
+                    if (status === 403 && isChannelApi) {
+                        const apiMsg = error?.response?.data?.message;
+                        setMsg(typeof apiMsg === 'string' && apiMsg.trim() ? apiMsg : 'あなたには閲覧権限がありません');
+                        setOpen(true);
+                    }
+                } catch {
+                    // no-op
+                }
+                return Promise.reject(error);
+            }
+        );
+        return () => {
+            axios.interceptors.response.eject(resInterceptor);
+        };
+    }, []);
+
+    return (
+        <Snackbar
+            open={open}
+            autoHideDuration={3500}
+            onClose={() => setOpen(false)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+            <Alert severity="warning" variant="filled" sx={{ width: '100%' }}>
+                {msg}
+            </Alert>
+        </Snackbar>
+    );
+}
+
 export default function Providers({ children }: { children: React.ReactNode }) {
     // 設定の復元
     const [settings, setSettings] = React.useState<ThemeSettings>(DEFAULT_SETTINGS);
@@ -236,6 +282,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
             <ThemeProvider theme={theme}>
                 {/* OS 連動は行わないため enableColorScheme は false に */}
                 <CssBaseline enableColorScheme={false} />
+                {/* 権限エラーのグローバルトースト */}
+                <AxiosPermissionToast />
                 {children}
                 {/* 設定ドロワー */}
                 {ready && <ThemeSettingsButton />}
