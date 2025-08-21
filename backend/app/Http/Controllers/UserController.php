@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Support\Facades\Schema; // 追加
+use Illuminate\Support\Facades\Log;    // 追加
 
 class UserController extends Controller
 {
@@ -287,14 +289,52 @@ class UserController extends Controller
         if (!$actor || !$this->isAdminOrManager($actor)) {
             abort(403, '権限がありません');
         }
-        // 削除前に履歴保存
-        DeletedUser::create([
-            'user_id'    => $user->id,
-            'name'       => $user->name,
-            'role'       => $user->role,
-            'email'      => $user->email,
-            'deleted_at' => now(),
-        ]);
+
+        // 削除前に履歴保存（テーブルが存在する場合のみ）
+        try {
+            if (Schema::hasTable('deleted_users')) {
+                DeletedUser::create([
+                    'user_id'    => $user->id,
+                    'name'       => $user->name,
+                    'role'       => $user->role,
+                    'email'      => $user->email ?? null,
+                    'deleted_at' => now(),
+                ]);
+            } else {
+                Log::warning('deleted_users table not found; skipping audit log on user delete', [
+                    'target_user_id' => $user->id,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Failed to insert into deleted_users', [
+                'error' => $e->getMessage(),
+                'target_user_id' => $user->id,
+            ]);
+            // 履歴保存に失敗しても削除自体は続行
+        }
+
+        // 関連ファイルの掃除（アバター）
+        try {
+            if (!empty($user->avatar_path)) {
+                Storage::disk('public')->delete($user->avatar_path);
+            }
+            $dir = 'avatars/' . $user->id;
+            if (Storage::disk('public')->exists($dir)) {
+                foreach (Storage::disk('public')->files($dir) as $f) {
+                    Storage::disk('public')->delete($f);
+                }
+                foreach (Storage::disk('public')->directories($dir) as $sub) {
+                    Storage::disk('public')->deleteDirectory($sub);
+                }
+                Storage::disk('public')->deleteDirectory($dir);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Failed to cleanup avatar files on user delete', [
+                'error' => $e->getMessage(),
+                'target_user_id' => $user->id,
+            ]);
+        }
+
         $user->delete();
         return response()->json(['message' => 'deleted']);
     }
