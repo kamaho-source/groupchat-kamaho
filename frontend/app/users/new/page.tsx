@@ -64,6 +64,16 @@ const ICON_OPTIONS = [
 export default function NewUserPage() {
     const router = useRouter()
 
+    // 共通ナビゲーション: 未認証なら /login、認証済なら /
+    const navigateAfterClose = async () => {
+        try {
+            await axios.get('/api/user');
+            router.push('/');
+        } catch {
+            router.push('/login');
+        }
+    };
+
     // 追加: ユーザーID
     const [userId, setUserId] = useState('')
 
@@ -146,9 +156,14 @@ export default function NewUserPage() {
                 })
             }
 
-            router.push('/')
+            await navigateAfterClose()
         } catch (err: any) {
             console.error(err)
+            const status = err?.response?.status;
+            if (status === 401 || status === 403 || status === 419) {
+                await navigateAfterClose();
+                return;
+            }
             setError(err?.response?.data?.message || 'ユーザーの作成に失敗しました')
         } finally {
             setSubmitting(false)
@@ -298,7 +313,7 @@ export default function NewUserPage() {
 
                             {/* フッター操作 */}
                             <Stack direction="row" spacing={2} justifyContent="flex-end">
-                                <Button type="button" variant="text" onClick={() => router.push('/users')}>キャンセル</Button>
+                                <Button type="button" variant="text" onClick={navigateAfterClose}>キャンセル</Button>
                                 <LoadingButton type="submit" variant="contained" loading={submitting}>作成</LoadingButton>
                             </Stack>
                         </Stack>
