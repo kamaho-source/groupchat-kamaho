@@ -290,7 +290,7 @@ export default function EditUserPage() {
                                         onChange={(e: SelectChangeEvent<Role>) => {
                                             const nextRole = e.target.value as Role;
                                             if (nextRole === 'admin' && currentUserRole !== 'admin') {
-                                                setToast({ open: true, msg: 'あなたには権限がありません', sev: 'error' });
+                                                setSnack({ open: true, message: 'あなたには権限がありません', severity: 'error' });
                                                 return;
                                             }
                                             setRole(nextRole);
