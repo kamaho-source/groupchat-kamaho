@@ -158,6 +158,7 @@ export default function NewUserPage() {
     // ファイル input ID
     const fileInputId = 'user-avatar-upload-input'
 
+    // フォームを常に表示
     return (
         <Container maxWidth="sm" sx={{ py: 4 }}>
             <Typography variant="h4" fontWeight={700} gutterBottom>
@@ -204,7 +205,7 @@ export default function NewUserPage() {
                                     onChange={(e: SelectChangeEvent<Role>) => setRole(e.target.value as Role)}
                                 >
                                     {ROLES.map((r) => (
-                                        <MenuItem key={r.value} value={r.value}>
+                                        <MenuItem key={r.value} value={r.value} disabled={r.value === 'admin' || r.value === 'manager'}>
                                             {r.label}
                                         </MenuItem>
                                     ))}

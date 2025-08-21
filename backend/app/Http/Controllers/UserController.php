@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\DeletedUser;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
@@ -54,19 +55,30 @@ class UserController extends Controller
         }
 
         $data = $request->validate([
-            'name'      => ['required', 'string', 'max:255'],
+            'name'      => ['nullable', 'string', 'max:255', 'required_without:is_active'],
+            'is_active' => ['nullable', 'boolean', 'required_without:name'],
             'role'      => ['nullable', Rule::in(['admin', 'manager', 'member', 'viewer'])],
             'icon_name' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $user->name = $data['name'];
+        if (array_key_exists('name', $data)) {
+            $user->name = $data['name'];
+        }
 
-        // role は管理者/マネージャーのみ変更可（リクエストに role があって権限がない場合は明示的に403）
-        if ($request->exists('role') && !$this->isAdminOrManager($actor)) {
+        // role は管理者のみ変更可（リクエストに role があって権限がない場合は明示的に403）
+        if ($request->exists('role') && !$this->isAdmin($actor)) {
             abort(403, 'ロール変更権限がありません');
         }
-        if (array_key_exists('role', $data) && $this->isAdminOrManager($actor)) {
+        if (array_key_exists('role', $data) && $this->isAdmin($actor)) {
             $user->role = $data['role'] ?? $user->role;
+        }
+
+        // is_active は管理者のみ変更可
+        if ($request->exists('is_active') && !$this->isAdmin($actor)) {
+            abort(403, 'アクティブ状態変更権限がありません');
+        }
+        if (array_key_exists('is_active', $data) && $this->isAdmin($actor)) {
+            $user->is_active = $data['is_active'];
         }
 
         // icon_name が送られてきた場合：画像を解除してアイコンに切替（null も許可）
@@ -130,10 +142,10 @@ class UserController extends Controller
         $user->name = $data['name'];
 
         // role は管理者/マネージャーのみ変更可（リクエストに role があって権限がない場合は明示的に403）
-        if ($request->exists('role') && !$this->isAdminOrManager($actor)) {
+        if ($request->exists('role') && !$this->isAdmin($actor)) {
             abort(403, 'ロール変更権限がありません');
         }
-        if (array_key_exists('role', $data) && $this->isAdminOrManager($actor)) {
+        if (array_key_exists('role', $data) && $this->isAdmin($actor)) {
             $user->role = $data['role'] ?? $user->role;
         }
 
@@ -185,8 +197,8 @@ class UserController extends Controller
         if (!$actor) {
             abort(401);
         }
-        // 管理者のみ許可
-        if ($actor->role !== 'admin') {
+        // 管理者またはマネージャーのみ許可
+        if (!$this->isAdminOrManager($actor)) {
             abort(403, 'パスワード更新権限がありません');
         }
         // 対象はメンバー/マネージャーに限定（管理者のパスワードは変更不可）
@@ -215,7 +227,7 @@ class UserController extends Controller
         $this->authorizeList($request->user());
 
         $users = User::query()
-            ->select(['id', 'user_id', 'name', 'role', 'icon_name', 'avatar_path', 'updated_at'])
+            ->select(['id', 'user_id', 'name', 'role', 'icon_name', 'avatar_path', 'is_active', 'updated_at'])
             ->orderBy('name')
             ->get()
             ->map(function (User $u) {
@@ -228,10 +240,126 @@ class UserController extends Controller
                     'avatar_url' => $u->avatar_path
                         ? Storage::disk('public')->url($u->avatar_path) . '?v=' . ($u->updated_at?->timestamp ?? time())
                         : null,
+                    'is_active'  => $u->is_active,
                 ];
             });
 
         return response()->json($users);
+    }
+
+    /**
+     * PUT /api/users/{user}/deactivate
+     * アカウント停止
+     */
+    public function deactivate(Request $request, User $user): JsonResponse
+    {
+        $actor = $request->user();
+        if (!$actor || !$this->isAdminOrManager($actor)) {
+            abort(403, '権限がありません');
+        }
+        $user->is_active = false;
+        $user->save();
+        return response()->json(['message' => 'deactivated']);
+    }
+
+    /**
+     * PUT /api/users/{user}/activate
+     * アカウント再開
+     */
+    public function activate(Request $request, User $user): JsonResponse
+    {
+        $actor = $request->user();
+        if (!$actor || !$this->isAdminOrManager($actor)) {
+            abort(403, '権限がありません');
+        }
+        $user->is_active = true;
+        $user->save();
+        return response()->json(['message' => 'activated']);
+    }
+
+    /**
+     * DELETE /api/users/{user}
+     * アカウント削除
+     */
+    public function destroy(Request $request, User $user): JsonResponse
+    {
+        $actor = $request->user();
+        if (!$actor || !$this->isAdminOrManager($actor)) {
+            abort(403, '権限がありません');
+        }
+        // 削除前に履歴保存
+        DeletedUser::create([
+            'user_id'    => $user->id,
+            'name'       => $user->name,
+            'role'       => $user->role,
+            'email'      => $user->email,
+            'deleted_at' => now(),
+        ]);
+        $user->delete();
+        return response()->json(['message' => 'deleted']);
+    }
+
+    /**
+     * POST /api/users
+     * 新規ユーザー作成（認証不要）
+     */
+    public function store(Request $request): JsonResponse
+    {
+        // 認証不要のため、権限チェックを削除
+        // $actor = $request->user();
+        // if (!$actor || !$this->isAdminOrManager($actor)) {
+        //     abort(403, 'ユーザー作成権限がありません');
+        // }
+
+        // バリデーション
+        $data = $request->validate([
+            'user_id'   => ['required', 'string', 'max:255', 'unique:users,user_id'],
+            'name'      => ['required', 'string', 'max:255'],
+            'role'      => ['required', Rule::in(['admin', 'manager', 'member', 'viewer'])],
+            'password'  => ['required', Password::min(8)],
+            'icon_name' => ['nullable', 'string', 'max:255'],
+            'avatar'    => ['nullable', 'file', 'image', 'max:5120'], // 5MB
+        ]);
+
+        $user = new User();
+        $user->user_id = $data['user_id'];
+        $user->name    = $data['name'];
+        $user->role    = $data['role'];
+        $user->password = Hash::make($data['password']);
+        $user->is_active = true;
+
+        // 画像アップロード対応
+        if ($request->hasFile('avatar')) {
+            $ext = strtolower($request->file('avatar')->getClientOriginalExtension() ?: $request->file('avatar')->extension() ?: 'jpg');
+            $filename = 'user-' . uniqid() . '.' . $ext;
+            $request->file('avatar')->storeAs('avatars', $filename, 'public');
+            $user->avatar_path = 'avatars/' . $filename;
+            $user->icon_name = null;
+        } else {
+            $user->icon_name = $data['icon_name'] ?? null;
+            $user->avatar_path = null;
+        }
+
+        $user->save();
+
+        return response()->json([
+            'message' => 'created',
+            'user' => [
+                'id'         => (string) $user->id,
+                'user_id'    => $user->user_id,
+                'name'       => $user->name,
+                'role'       => $user->role,
+                'icon_name'  => $user->icon_name,
+                'avatar_url' => $user->avatar_path
+                    ? Storage::disk('public')->url($user->avatar_path) . '?v=' . ($user->updated_at?->timestamp ?? time())
+                    : null,
+            ],
+        ], 201);
+    }
+
+    private function isAdmin(User $user): bool
+    {
+        return $user->role === 'admin';
     }
 
     private function isAdminOrManager(User $user): bool

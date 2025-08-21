@@ -402,6 +402,8 @@ const ChannelList: React.FC<{
             if (otherId != null) {
                 const other = allUsers.find(u => u.id === otherId);
                 if (other) return `@ ${other.name} 🔒`;
+                // ユーザー名が取得できない場合は退会ユーザーと表示
+                return `@ 退会ユーザー 🔒`;
             }
             return `DM ${a}-${b} 🔒`;
         }
@@ -1510,6 +1512,20 @@ export default function HomePage() {
                             </ListItemIcon>
                             ユーザー編集
                         </MenuItem>
+
+                        {isAdmin && (
+                            <MenuItem
+                                onClick={() => {
+                                    handleCloseUserMenu();
+                                    router.push('/users/new');
+                                }}
+                            >
+                                <ListItemIcon>
+                                    <AddIcon fontSize="small" />
+                                </ListItemIcon>
+                                ユーザー追加
+                            </MenuItem>
+                        )}
 
                         {isAdmin && (
                             <MenuItem

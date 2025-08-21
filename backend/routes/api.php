@@ -15,6 +15,7 @@ use App\Http\Controllers\MessageController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ChannelPrivacyController;
 use App\Http\Controllers\AdminStatsController;
+use App\Http\Controllers\AuthUserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,10 +26,9 @@ Route::middleware([
     EnsureFrontendRequestsAreStateful::class,
     'auth:sanctum',
 ])->group(function () {
-    // 認証済みユーザー情報取得
-    Route::get('user', function (Request $request) {
-        return response()->json($request->user());
-    });
+    // 認証済みユーザー情報取得（クロージャ→コントローラへ置換）
+    Route::get('user', [AuthUserController::class, 'show']);
+
     // ユーザー一覧取得（アイコン情報含む）
     Route::get('users', [UserController::class, 'index']);
 
@@ -37,6 +37,7 @@ Route::middleware([
     Route::put('users/{user}', [UserController::class, 'update']);               // JSON（画像なし）
     Route::post('users/{user}', [UserController::class, 'updateWithAvatar']);    // multipart（画像あり）
     Route::put('users/{user}/password', [UserController::class, 'updatePassword']); // 管理者のみ（対象はメンバー/マネージャー）
+    Route::delete('users/{user}', [UserController::class, 'destroy']); // アカウント削除API追加
 
     // チャンネル一覧（権限に応じた結果のみ。resource より先に定義して上書き）
     Route::get('channels', [ChannelPrivacyController::class, 'index']);
@@ -48,6 +49,9 @@ Route::middleware([
     Route::put('channels/{channel}/privacy', [ChannelPrivacyController::class, 'updatePrivacy']);
 
     // チャンネル／メッセージ
+    // 個別取得は閲覧可能性を検証
+    Route::get('channels/{channel}', [ChannelController::class, 'show'])
+        ->middleware(\App\Http\Middleware\EnsureChannelViewable::class);
     Route::apiResource('channels', ChannelController::class);
 
     // メッセージAPIは閲覧可能性を検証
@@ -96,3 +100,7 @@ Route::middleware([
     // 必要に応じてユーザー登録
     Route::post('register', [RegisteredUserController::class, 'store']);
 });
+
+// 認証不要で新規ユーザー登録
+Route::post('users', [UserController::class, 'store']);
+

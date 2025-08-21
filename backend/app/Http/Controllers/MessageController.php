@@ -7,11 +7,37 @@ use Illuminate\Http\Request;
 use App\Models\Message;
 use App\Events\MessageUpdated;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class MessageController extends Controller
 {
+    private function canView(Request $request, int $channelId): bool
+    {
+        $user = $request->user();
+        if (!$user) {
+            return false;
+        }
+        $role = $user->role ?? null;
+        if (in_array($role, ['admin', 'manager'], true)) {
+            return true;
+        }
+        $isPrivate = (bool) DB::table('channels')->where('id', $channelId)->value('is_private');
+        if (!$isPrivate) {
+            return true;
+        }
+        return DB::table('channel_user')
+            ->where('channel_id', $channelId)
+            ->where('user_id', $user->id)
+            ->exists();
+    }
+
     public function index($channelId)
     {
+        // ミドルウェアに加えて二重チェック（安全側）
+        if (!request()->user() || !$this->canView(request(), (int)$channelId)) {
+            return response()->json(['message' => 'あなたには閲覧権限がありません'], 403);
+        }
+
         $messages = Message::where('channel_id', $channelId)->orderBy('created_at')->get();
 
         return response()->json($messages);
@@ -19,6 +45,10 @@ class MessageController extends Controller
 
     public function store(Request $request, $channelId)
     {
+        if (!$this->canView($request, (int)$channelId)) {
+            return response()->json(['message' => 'あなたには閲覧権限がありません'], 403);
+        }
+
         $validated = $request->validate([
             'user' => 'required|string|max:255',
             'content' => 'required|string',
@@ -57,6 +87,10 @@ class MessageController extends Controller
 
     public function update(Request $request, Channel $channel, Message $message)
     {
+        if (!$this->canView($request, (int)$channel->id)) {
+            return response()->json(['message' => 'あなたには閲覧権限がありません'], 403);
+        }
+
         // チャンネル & ユーザーの権限チェックを入れても良い
         $request->validate([
             'content' => 'required|string',

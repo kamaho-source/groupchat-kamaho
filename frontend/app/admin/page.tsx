@@ -41,7 +41,7 @@ export default function AdminDashboardPage() {
     const [checking, setChecking] = React.useState(true);
     const [authorized, setAuthorized] = React.useState(false);
 
-    type AdminUser = { id: number; name: string; roles: string[] };
+    type AdminUser = { id: number; name: string; roles: string[]; is_active: boolean };
 
     const [users, setUsers] = React.useState<AdminUser[]>([]);
     const [loadingUsers, setLoadingUsers] = React.useState(true);
@@ -113,7 +113,12 @@ export default function AdminDashboardPage() {
                             if (typeof r === 'string' && !roles.includes(r)) roles.push(r);
                         }
                     }
-                    return { id: Number(u.id), name: String(u.name), roles };
+                    return {
+                        id: Number(u.id),
+                        name: String(u.name),
+                        roles,
+                        is_active: Boolean(u.is_active), // ←APIの値をそのまま使う
+                    };
                 });
                 if (mounted) setUsers(normalized);
             } catch {
@@ -271,23 +276,16 @@ export default function AdminDashboardPage() {
     };
 
     const setRole = async (userId: number, role: 'admin' | 'manager', checked: boolean) => {
-        // 事前のロールを保持（失敗時ロールバック用）
         const prev = users.find(u => u.id === userId);
-        const prevRoles = prev ? [...prev.roles] : [];
         const prevName = prev?.name;
-
+        let nextRole: 'admin' | 'manager' | 'member' = 'member';
+        if (role === 'admin' && checked) nextRole = 'admin';
+        else if (role === 'manager' && checked) nextRole = 'manager';
         // 楽観的更新
         setUsers((list) =>
             list.map((u) =>
                 u.id === userId
-                    ? {
-                          ...u,
-                          roles: Array.from(
-                              new Set(
-                                  checked ? [...u.roles, role] : u.roles.filter((r) => r !== role)
-                              )
-                          ),
-                      }
+                    ? { ...u, roles: [nextRole] }
                     : u
             )
         );
@@ -296,72 +294,44 @@ export default function AdminDashboardPage() {
             n.add(userId);
             return n;
         });
-
-        const next = checked ? Array.from(new Set([...prevRoles, role])) : prevRoles.filter((r) => r !== role);
-
         try {
-            let success = false;
-            const isAdminNext = next.includes('admin');
-            const isManagerNext = next.includes('manager');
-
-            // 試行1: 専用エンドポイント（一般的な形）
-            try {
-                await axios.put(`/api/users/${userId}/roles`, { roles: next });
-                success = true;
-            } catch (e: any) {
-                // 試行2: ユーザー更新で roles を送る（name が必須な実装に対応）
-                if (!success && prevName) {
-                    try {
-                        await axios.put(`/api/users/${userId}`, { name: prevName, roles: next });
-                        success = true;
-                    } catch {}
-                }
-                // 試行3: PATCH で roles を送る（name 同梱）
-                if (!success && prevName) {
-                    try {
-                        await axios.patch(`/api/users/${userId}`, { name: prevName, roles: next });
-                        success = true;
-                    } catch {}
-                }
-                // 試行4: ブール併用パターン（name 同梱）
-                if (!success && prevName) {
-                    try {
-                        await axios.put(`/api/users/${userId}`, {
-                            name: prevName,
-                            roles: next,
-                            is_admin: isAdminNext,
-                            // 単一 role を要求する実装向けの保険（admin と併存するケースは roles 優先）
-                            role: isManagerNext ? 'manager' : isAdminNext ? 'admin' : null,
-                        });
-                        success = true;
-                    } catch (e2: any) {
-                        // すべて失敗したら元の例外を再スロー
-                        throw e2 || e;
-                    }
-                }
-            }
-
-            if (!success) {
-                throw new Error('ロール更新APIが利用できません。');
-            }
-
-            setToast({ open: true, msg: 'ロールを更新しました。', sev: 'success' });
-        } catch (e: any) {
-            // ロールバック
-            setUsers((list) =>
-                list.map((u) => (u.id === userId ? { ...u, roles: prevRoles } : u))
-            );
-            const msg =
-                (e && e.response && (e.response.data?.message || e.response.data?.error)) ||
-                e?.message ||
-                'ロールの更新に失敗しました。';
-            setToast({ open: true, msg, sev: 'error' });
+            await axios.put(`/api/users/${userId}`, { name: prevName, role: nextRole });
+            setToast({ open: true, msg: '権限を更新しました。', sev: 'success' });
+        } catch {
+            setToast({ open: true, msg: '権限の更新に失敗しました。', sev: 'error' });
         } finally {
             setSavingIds((s) => {
                 const n = new Set(s);
                 n.delete(userId);
                 return n;
             });
+        }
+    };
+
+    const toggleActive = async (userId: number, isActive: boolean) => {
+        setSavingIds((s) => { const n = new Set(s); n.add(userId); return n; });
+        try {
+            await axios.put(`/api/users/${userId}`, { is_active: !isActive });
+            setUsers((list) => list.map((u) => u.id === userId ? { ...u, is_active: !isActive } : u));
+            setToast({ open: true, msg: isActive ? 'アカウントを停止しました。' : 'アカウントを再開しました。', sev: 'success' });
+        } catch {
+            setToast({ open: true, msg: 'アクティブ状態の変更に失敗しました。', sev: 'error' });
+        } finally {
+            setSavingIds((s) => { const n = new Set(s); n.delete(userId); return n; });
+        }
+    };
+
+    const deleteUser = async (userId: number) => {
+        if (!window.confirm('本当にこのユーザーを削除しますか？')) return;
+        setSavingIds((s) => { const n = new Set(s); n.add(userId); return n; });
+        try {
+            await axios.delete(`/api/users/${userId}`);
+            setUsers((list) => list.filter((u) => u.id !== userId));
+            setToast({ open: true, msg: 'ユーザーを削除しました。', sev: 'success' });
+        } catch {
+            setToast({ open: true, msg: 'ユーザー削除に失敗しました。', sev: 'error' });
+        } finally {
+            setSavingIds((s) => { const n = new Set(s); n.delete(userId); return n; });
         }
     };
 
@@ -424,7 +394,15 @@ export default function AdminDashboardPage() {
                                         justifyContent="space-between"
                                         sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1 }}
                                     >
-                                        <Typography variant="subtitle2">{u.name}</Typography>
+                                        <Stack direction="row" spacing={1} alignItems="center">
+                                            <Typography variant="subtitle2">{u.name}</Typography>
+                                            <Chip
+                                                label={u.is_active ? 'アクティブ' : '停止中'}
+                                                color={u.is_active ? 'success' : 'default'}
+                                                size="small"
+                                                sx={{ ml: 1 }}
+                                            />
+                                        </Stack>
                                         <Stack direction="row" spacing={2}>
                                             <FormControlLabel
                                                 control={
@@ -448,6 +426,24 @@ export default function AdminDashboardPage() {
                                                 }
                                                 label="マネージャー"
                                             />
+                                            <Button
+                                                size="small"
+                                                variant={u.is_active ? 'outlined' : 'contained'}
+                                                color={u.is_active ? 'warning' : 'success'}
+                                                startIcon={u.is_active ? <LockIcon /> : <LockOpenIcon />}
+                                                onClick={() => toggleActive(u.id, u.is_active)}
+                                                disabled={disabled}
+                                            >
+                                                {u.is_active ? '停止' : '再開'}
+                                            </Button>
+                                            <IconButton
+                                                onClick={() => deleteUser(u.id)}
+                                                color="error"
+                                                disabled={disabled}
+                                                aria-label="削除"
+                                            >
+                                                <DeleteForeverIcon />
+                                            </IconButton>
                                         </Stack>
                                     </Stack>
                                 );

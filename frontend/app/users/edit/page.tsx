@@ -287,10 +287,17 @@ export default function EditUserPage() {
                                         labelId="role-select-label"
                                         label="権限ロール（管理者専用）"
                                         value={role}
-                                        onChange={(e: SelectChangeEvent<Role>) => setRole(e.target.value as Role)}
+                                        onChange={(e: SelectChangeEvent<Role>) => {
+                                            const nextRole = e.target.value as Role;
+                                            if (nextRole === 'admin' && currentUserRole !== 'admin') {
+                                                setToast({ open: true, msg: 'あなたには権限がありません', sev: 'error' });
+                                                return;
+                                            }
+                                            setRole(nextRole);
+                                        }}
                                     >
                                         {ROLES.map((r) => (
-                                            <MenuItem key={r.value} value={r.value}>
+                                            <MenuItem key={r.value} value={r.value} disabled={r.value === 'admin' && currentUserRole !== 'admin'}>
                                                 {r.label}
                                             </MenuItem>
                                         ))}

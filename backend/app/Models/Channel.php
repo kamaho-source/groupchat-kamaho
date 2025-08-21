@@ -9,7 +9,7 @@ class Channel extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name'];
+    protected $fillable = ['name', 'is_private'];
 
     public function messages()
     {
@@ -19,5 +19,10 @@ class Channel extends Model
     public function projects()
     {
         return $this->hasMany(Project::class);
+    }
+
+    public function users()
+    {
+        return $this->belongsToMany(User::class, 'channel_user', 'channel_id', 'user_id');
     }
 }

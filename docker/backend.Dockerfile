@@ -14,12 +14,48 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install gd zip pdo pdo_mysql mysqli xml
 
-RUN docker-php-ext-install bcmath
+RUN docker-php-ext-install bcmath \
+    && docker-php-ext-install opcache \
+    && pecl install apcu \
+    && docker-php-ext-enable apcu
 # Install Composer \
-COPY --from=composer /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Enable Apache modules
 RUN a2enmod rewrite headers
+
+# PHP performance tuning (OPcache/APCu + general INI)
+RUN set -eux; \
+    { \
+      echo "opcache.enable=1"; \
+      echo "opcache.enable_cli=0"; \
+      echo "opcache.memory_consumption=192"; \
+      echo "opcache.interned_strings_buffer=16"; \
+      echo "opcache.max_accelerated_files=65000"; \
+      echo "opcache.validate_timestamps=1"; \
+      echo "opcache.revalidate_freq=1"; \
+      echo "opcache.save_comments=1"; \
+      echo "opcache.fast_shutdown=1"; \
+      echo "opcache.jit=tracing"; \
+      echo "opcache.jit_buffer_size=64M"; \
+    } > /usr/local/etc/php/conf.d/10-opcache.ini; \
+    { \
+      echo "apc.enabled=1"; \
+      echo "apc.enable_cli=0"; \
+      echo "apc.shm_size=64M"; \
+      echo "apc.entries_hint=4096"; \
+      echo "apc.ttl=7200"; \
+      echo "apc.gc_ttl=3600"; \
+    } > /usr/local/etc/php/conf.d/15-apcu.ini; \
+    { \
+      echo "memory_limit=512M"; \
+      echo "realpath_cache_size=4096K"; \
+      echo "realpath_cache_ttl=600"; \
+      echo "expose_php=0"; \
+      echo "upload_max_filesize=64M"; \
+      echo "post_max_size=64M"; \
+      echo "date.timezone=Asia/Tokyo"; \
+    } > /usr/local/etc/php/conf.d/99-performance.ini
 
 # Set working directory
 WORKDIR /var/www/html
