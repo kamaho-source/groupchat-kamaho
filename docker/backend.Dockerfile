@@ -57,5 +57,22 @@ RUN set -eux; \
       echo "date.timezone=Asia/Tokyo"; \
     } > /usr/local/etc/php/conf.d/99-performance.ini
 
-# Set working directory
+# App code
 WORKDIR /var/www/html
+COPY ./backend/composer.json ./
+COPY ./backend/composer.lock ./
+RUN composer install --no-dev --prefer-dist --no-interaction --no-progress --no-scripts
+COPY ./backend .
+# Apache vhost inside image
+COPY ./docker/apache/000-default.conf /etc/apache2/sites-available/000-default.conf
+
+# Ensure writable directories
+RUN chown -R www-data:www-data storage bootstrap/cache \
+ && chmod -R 775 storage bootstrap/cache || true
+
+# Pre-optimize (will not require DB)
+RUN php artisan storage:link || true \
+ && php artisan config:clear \
+ && php artisan config:cache \
+ && php artisan route:cache \
+ && php artisan view:cache || true
