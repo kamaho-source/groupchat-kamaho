@@ -146,7 +146,7 @@ export default function NewUserPage() {
                 })
             }
 
-            router.push('/users')
+            router.push('/')
         } catch (err: any) {
             console.error(err)
             setError(err?.response?.data?.message || 'ユーザーの作成に失敗しました')
