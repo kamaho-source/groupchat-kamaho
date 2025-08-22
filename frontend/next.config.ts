@@ -1,58 +1,17 @@
-import { NextConfig } from 'next';
+import type { NextConfig } from 'next';
 
-const HOST = 'http://groupchat-kamaho-app';
+const backend = process.env.NEXT_PUBLIC_BACKEND_ORIGIN || 'http://localhost:8000';
 
 const nextConfig: NextConfig = {
-    async rewrites() {
-        return [
-            // Sanctum の CSRF Cookie
-            {
-                source: '/sanctum/:path*',
-                destination: `${HOST}/sanctum/:path*`,
-            },
-            // 認証前：ログイン／ログアウト／登録
-            {
-                source: '/api/login',
-                destination: `${HOST}/api/login`,
-            },
-            {
-                source: '/api/logout',
-                destination: `${HOST}/api/logout`,
-            },
-            {
-                source: '/api/register',
-                destination: `${HOST}/api/register`,
-            },
-            // 認証済み：ユーザー情報取得
-            {
-                source: '/api/user',
-                destination: `${HOST}/api/user`,
-            },
-            // Broadcasting 認証（PresenceChannel / PrivateChannel 用）
-            {
-                source: '/broadcasting/auth',
-                destination: `${HOST}/broadcasting/auth`,
-            },
-            // その他の Laravel API
-            {
-                source: '/api/:path*',
-                destination: `${HOST}/api/:path*`,
-            },
-            // ファイルストレージへのリライト
-            {
-                source: '/storage/:path*',
-                destination: `${HOST}/storage/:path*`,
-            },
-        ];
-    },
-    eslint: {
-        // 本番ビルドでは ESLint による失敗を無視（CI で実施推奨）
-        ignoreDuringBuilds: true,
-    },
-    typescript: {
-        // 型エラーでビルドを止めない（CI でチェック推奨）
-        ignoreBuildErrors: true,
-    },
+  async rewrites() {
+    return [
+      { source: '/sanctum/:path*', destination: `${backend}/sanctum/:path*` },
+      { source: '/api/:path*', destination: `${backend}/api/:path*` },
+      { source: '/login', destination: `${backend}/login` },
+      { source: '/logout', destination: `${backend}/logout` },
+      { source: '/user', destination: `${backend}/user` },
+    ];
+  },
 };
 
 export default nextConfig;

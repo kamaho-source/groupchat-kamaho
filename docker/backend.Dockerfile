@@ -1,4 +1,5 @@
-FROM php:8.4-apache
+FROM php:8.2-apache
+
 # Install dependencies
 RUN apt-get update && apt-get install -y \
     libzip-dev \
@@ -66,13 +67,19 @@ COPY ./backend .
 # Apache vhost inside image
 COPY ./docker/apache/000-default.conf /etc/apache2/sites-available/000-default.conf
 
-# Ensure writable directories
-RUN chown -R www-data:www-data storage bootstrap/cache \
- && chmod -R 775 storage bootstrap/cache || true
+# Ensure writable directories (will be overwritten by volume but needed for build)
+RUN mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache \
+ && chown -R www-data:www-data storage bootstrap/cache \
+ && chmod -R 775 storage bootstrap/cache
 
-# Pre-optimize (will not require DB)
+# Pre-optimize (ignore failures if config not ready for build stage)
 RUN php artisan storage:link || true \
- && php artisan config:clear \
- && php artisan config:cache \
- && php artisan route:cache \
+ && php artisan config:clear || true \
+ && php artisan config:cache || true \
+ && php artisan route:cache || true \
  && php artisan view:cache || true
+
+# Startup script to recreate storage dirs after volume mount
+COPY ./docker/start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
+CMD ["/usr/local/bin/start.sh"]
