@@ -1,106 +1,74 @@
 <?php
 
-use App\Http\Controllers\ProjectController;
-use App\Http\Controllers\ProjectChatController;
-use App\Http\Controllers\ProjectFileController;
-use App\Http\Controllers\ProjectUserController;
-use App\Http\Controllers\TaskController;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Http\Request;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use Laravel\Fortify\Http\Controllers\AuthenticatedSessionController;
 use Laravel\Fortify\Http\Controllers\RegisteredUserController;
-use App\Http\Controllers\ChannelController;
-use App\Http\Controllers\MessageController;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\ChannelPrivacyController;
-use App\Http\Controllers\AdminStatsController;
-use App\Http\Controllers\AuthUserController;
 
-/*
-|--------------------------------------------------------------------------
-| SPA 認証後 API ルート (api ミドルウェア上で動作)
-|--------------------------------------------------------------------------
-*/
-Route::middleware([
-    EnsureFrontendRequestsAreStateful::class,
-    'auth:sanctum',
-])->group(function () {
-    // 認証済みユーザー情報取得（クロージャ→コントローラへ置換）
+use App\Http\Controllers\AuthUserController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\ChannelController;
+use App\Http\Controllers\ChannelPrivacyController;
+use App\Http\Controllers\MessageController;
+use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ProjectUserController;
+use App\Http\Controllers\ProjectFileController;
+use App\Http\Controllers\ProjectChatController;
+use App\Http\Controllers\TaskController;
+
+// 未認証 (CSRF + セッション開始 + Statefull) グループ
+Route::middleware(['web', EnsureFrontendRequestsAreStateful::class])->group(function () {
+    Route::post('login',    [AuthenticatedSessionController::class, 'store'])->name('login');
+    Route::post('logout',   [AuthenticatedSessionController::class, 'destroy'])->name('logout');
+    Route::post('register', [RegisteredUserController::class, 'store'])->name('register');
+});
+
+// 認証後 API
+Route::middleware(['web', EnsureFrontendRequestsAreStateful::class, 'auth:sanctum'])->group(function () {
     Route::get('user', [AuthUserController::class, 'show']);
 
-    // ユーザー一覧取得（アイコン情報含む）
+    // Users
     Route::get('users', [UserController::class, 'index']);
-
-    // ユーザー個別の取得・更新（メール不使用、パスワードは別エンドポイント）
     Route::get('users/{user}', [UserController::class, 'show']);
-    Route::put('users/{user}', [UserController::class, 'update']);               // JSON（画像なし）
-    Route::post('users/{user}', [UserController::class, 'updateWithAvatar']);    // multipart（画像あり）
-    Route::put('users/{user}/password', [UserController::class, 'updatePassword']); // 管理者のみ（対象はメンバー/マネージャー）
-    Route::delete('users/{user}', [UserController::class, 'destroy']); // アカウント削除API追加
+    Route::put('users/{user}', [UserController::class, 'update']);
+    Route::post('users/{user}', [UserController::class, 'updateWithAvatar']);
+    Route::put('users/{user}/password', [UserController::class, 'updatePassword']);
+    Route::delete('users/{user}', [UserController::class, 'destroy']);
 
-    // チャンネル一覧（権限に応じた結果のみ。resource より先に定義して上書き）
+    // Channels
     Route::get('channels', [ChannelPrivacyController::class, 'index']);
-
-    // 管理者向け統計
-    Route::get('admin/stats', [AdminStatsController::class, 'index']);
-    // プライバシー設定（管理者/マネージャー）
-    Route::get('channels/{channel}/members', [ChannelPrivacyController::class, 'members']);
-    Route::put('channels/{channel}/privacy', [ChannelPrivacyController::class, 'updatePrivacy']);
-
-    // チャンネル／メッセージ
-    // 個別取得は閲覧可能性を検証
     Route::get('channels/{channel}', [ChannelController::class, 'show'])
         ->middleware(\App\Http\Middleware\EnsureChannelViewable::class);
     Route::apiResource('channels', ChannelController::class);
 
-    // メッセージAPIは閲覧可能性を検証
+    // Messages
     Route::get('channels/{channel}/messages', [MessageController::class, 'index'])
         ->middleware(\App\Http\Middleware\EnsureChannelViewable::class);
     Route::post('channels/{channel}/messages', [MessageController::class, 'store'])
         ->middleware(\App\Http\Middleware\EnsureChannelViewable::class);
-    Route::apiResource('messages', MessageController::class);
-    // メッセージ更新
     Route::put('channels/{channel}/messages/{message}', [MessageController::class, 'update'])
         ->middleware(\App\Http\Middleware\EnsureChannelViewable::class);
+    Route::apiResource('messages', MessageController::class);
 
-    Route::get('projects',         [ProjectController::class, 'index']);
-    // プロジェクト作成（POST） ← ここを追加！
-    Route::post('projects',         [ProjectController::class, 'store']);
-    // プロジェクト詳細（GET）
+    // Projects
+    Route::get('projects', [ProjectController::class, 'index']);
+    Route::post('projects', [ProjectController::class, 'store']);
     Route::get('projects/{project}', [ProjectController::class, 'show']);
-    // プロジェクト更新（PATCH）
     Route::patch('projects/{project}', [ProjectController::class, 'update']);
-    // プロジェクト削除（DELETE）
     Route::delete('projects/{project}', [ProjectController::class, 'destroy']);
-    Route::get('/projects/{project}/users',             [ProjectUserController::class,'index']);
-    Route::post('/projects/{project}/users',             [ProjectUserController::class,'store']);
-    Route::put('/projects/{project}/users/{user}',       [ProjectUserController::class,'update']);
-    Route::delete('/projects/{project}/users/{user}',      [ProjectUserController::class,'destroy']);
-    Route::get('/projects/{project}/files',            [ProjectFileController::class,'index']);
-    Route::post('/projects/{project}/files',            [ProjectFileController::class,'store']);
-    Route::delete('/projects/{project}/files/{file}',     [ProjectFileController::class,'destroy']);
+    Route::get('projects/{project}/users', [ProjectUserController::class, 'index']);
+    Route::post('projects/{project}/users', [ProjectUserController::class, 'store']);
+    Route::put('projects/{project}/users/{user}', [ProjectUserController::class, 'update']);
+    Route::delete('projects/{project}/users/{user}', [ProjectUserController::class, 'destroy']);
+    Route::get('projects/{project}/files', [ProjectFileController::class, 'index']);
+    Route::post('projects/{project}/files', [ProjectFileController::class, 'store']);
+    Route::delete('projects/{project}/files/{file}', [ProjectFileController::class, 'destroy']);
 
-    // タスク
+    // Project Chat
+    Route::get ('projects/{project}/chat', [ProjectChatController::class, 'show']);
+    Route::post('projects/{project}/chat/send', [ProjectChatController::class, 'send']);
+
+    // Nested tasks
     Route::apiResource('projects.tasks', TaskController::class);
-
-    // プロジェクトチャット
-    Route::get ('/projects/{project}/chat',      [ProjectChatController::class,'show']);
-    Route::post('/projects/{project}/chat/send', [ProjectChatController::class,'send']);
-
 });
-
-// ここから「認証前」のエンドポイントを定義
-Route::middleware([
-    EnsureFrontendRequestsAreStateful::class,
-])->group(function () {
-    // API プレフィックスでのログイン／ログアウト
-    Route::post('login',  [AuthenticatedSessionController::class, 'store']);
-    Route::post('logout', [AuthenticatedSessionController::class, 'destroy']);
-    // 必要に応じてユーザー登録
-    Route::post('register', [RegisteredUserController::class, 'store']);
-});
-
-// 認証不要で新規ユーザー登録
-Route::post('users', [UserController::class, 'store']);
 
