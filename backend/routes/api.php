@@ -2,9 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
-use Laravel\Fortify\Http\Controllers\AuthenticatedSessionController;
-use Laravel\Fortify\Http\Controllers\RegisteredUserController;
-
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AuthUserController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ChannelController;
@@ -15,17 +13,24 @@ use App\Http\Controllers\ProjectUserController;
 use App\Http\Controllers\ProjectFileController;
 use App\Http\Controllers\ProjectChatController;
 use App\Http\Controllers\TaskController;
+use App\Http\Controllers\AdminStatsController;
 
-// 未認証 (CSRF + セッション開始 + Statefull) グループ
+// 未認証 (CSRF + セッション開始 + Statefull)
 Route::middleware(['web', EnsureFrontendRequestsAreStateful::class])->group(function () {
-    Route::post('login',    [AuthenticatedSessionController::class, 'store'])->name('login');
-    Route::post('logout',   [AuthenticatedSessionController::class, 'destroy'])->name('logout');
-    Route::post('register', [RegisteredUserController::class, 'store'])->name('register');
+    Route::post('login',    [AuthController::class, 'login'])->name('login');
+    Route::post('logout',   [AuthController::class, 'logout'])->name('logout');
+    Route::post('register', [AuthController::class, 'register'])->name('register');
 });
 
 // 認証後 API
 Route::middleware(['web', EnsureFrontendRequestsAreStateful::class, 'auth:sanctum'])->group(function () {
     Route::get('user', [AuthUserController::class, 'show']);
+
+    // 管理統計
+    Route::get('admin/stats', [AdminStatsController::class, 'index']);
+
+    // チャンネルメンバー一覧（追加）
+    Route::get('channels/{channel}/members', [ChannelPrivacyController::class, 'members']);
 
     // Users
     Route::get('users', [UserController::class, 'index']);
@@ -71,4 +76,3 @@ Route::middleware(['web', EnsureFrontendRequestsAreStateful::class, 'auth:sanctu
     // Nested tasks
     Route::apiResource('projects.tasks', TaskController::class);
 });
-
