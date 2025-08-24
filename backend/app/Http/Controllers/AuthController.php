@@ -28,6 +28,7 @@ class AuthController extends Controller
             'name'    => $data['name'],
             'password'=> $data['password'],
             'role'    => 'member',
+            'is_active' => 1,
         ]);
 
         // 自動ログイン
@@ -50,14 +51,32 @@ class AuthController extends Controller
             'password'=> ['required','string'],
         ]);
 
-        if (! Auth::attempt($credentials, true)) {
+        // まずユーザーが存在するかチェック
+        $user = User::where('user_id', $credentials['user_id'])->first();
+
+        if (!$user) {
             throw ValidationException::withMessages([
                 'user_id' => ['ユーザーIDまたはパスワードが正しくありません。'],
             ]);
         }
 
+        // パスワードをチェック
+        if (!Hash::check($credentials['password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'user_id' => ['ユーザーIDまたはパスワードが正しくありません。'],
+            ]);
+        }
+
+        // アカウントがアクティブかどうかをチェック
+        if (!$user->is_active) {
+            throw ValidationException::withMessages([
+                'user_id' => ['アカウント停止状態なのでログインできません。管理者にお問い合わせください。'],
+            ]);
+        }
+
+        // 認証成功
+        Auth::login($user, true);
         $request->session()->regenerate();
-        $user = Auth::user();
 
         return response()->json([
             'success' => true,
@@ -87,4 +106,3 @@ class AuthController extends Controller
         ];
     }
 }
-
