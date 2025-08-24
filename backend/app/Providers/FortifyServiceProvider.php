@@ -36,6 +36,12 @@ class FortifyServiceProvider extends ServiceProvider
             $user = \App\Models\User::where('user_id', $request->input(Fortify::username()))->first();
 
             if ($user && Hash::check($request->input('password'), $user->password)) {
+                // is_activeが0の場合、アカウント停止エラーをスロー
+                if (!$user->is_active) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'user_id' => ['アカウント停止状態なのでログインできません。管理者にお問い合わせください。'],
+                    ]);
+                }
                 return $user;
             }
 

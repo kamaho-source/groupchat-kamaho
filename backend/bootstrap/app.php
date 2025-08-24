@@ -26,6 +26,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'register',
             'logout',
         ]);
+
+        // ユーザーアクティブ状態チェックミドルウェアを登録
+        $middleware->alias([
+            'check.user.active' => \App\Http\Middleware\CheckUserActive::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
