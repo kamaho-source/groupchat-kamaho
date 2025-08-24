@@ -13,8 +13,17 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
+    protected $primaryKey = 'id';
+    public $incrementing = true;
+    protected $keyType = 'int';
 
-
+    /**
+     * ユーザー名として使用するフィールドを指定
+     */
+    public function getAuthIdentifierName()
+    {
+        return 'user_id';
+    }
 
     protected $fillable = [
         'user_id',

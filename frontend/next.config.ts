@@ -1,6 +1,9 @@
 import { NextConfig } from 'next';
 
-const HOST = 'http://groupchat-kamaho-app';
+// 開発環境ではlocalhost、本番環境ではコンテナ名を使用
+const HOST = process.env.NODE_ENV === 'production'
+    ? 'http://groupchat-kamaho-app'
+    : 'http://localhost:8000';
 
 const nextConfig: NextConfig = {
     async rewrites() {
@@ -45,6 +48,33 @@ const nextConfig: NextConfig = {
             },
         ];
     },
+    
+    // CORS設定（開発環境でのみ有効）
+    async headers() {
+        if (process.env.NODE_ENV === 'development') {
+            return [
+                {
+                    source: '/(.*)',
+                    headers: [
+                        {
+                            key: 'Access-Control-Allow-Origin',
+                            value: '*',
+                        },
+                        {
+                            key: 'Access-Control-Allow-Methods',
+                            value: 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+                        },
+                        {
+                            key: 'Access-Control-Allow-Headers',
+                            value: 'Content-Type, Authorization, X-Requested-With, X-CSRF-TOKEN',
+                        },
+                    ],
+                },
+            ];
+        }
+        return [];
+    },
+
     eslint: {
         // 本番ビルドでは ESLint による失敗を無視（CI で実施推奨）
         ignoreDuringBuilds: true,
@@ -52,6 +82,19 @@ const nextConfig: NextConfig = {
     typescript: {
         // 型エラーでビルドを止めない（CI でチェック推奨）
         ignoreBuildErrors: true,
+    },
+    
+    // 開発環境での最適化
+    experimental: {
+        // 開発環境での高速リロード
+        turbo: {
+            rules: {
+                '*.svg': {
+                    loaders: ['@svgr/webpack'],
+                    as: '*.js',
+                },
+            },
+        },
     },
 };
 

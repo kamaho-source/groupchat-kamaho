@@ -1,31 +1,43 @@
 <?php
 
-use App\Http\Controllers\ProjectController;
-use App\Http\Controllers\ProjectChatController;
-use App\Http\Controllers\ProjectFileController;
-use App\Http\Controllers\ProjectUserController;
-use App\Http\Controllers\TaskController;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Http\Request;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use Laravel\Fortify\Http\Controllers\AuthenticatedSessionController;
 use Laravel\Fortify\Http\Controllers\RegisteredUserController;
-use App\Http\Controllers\ChannelController;
-use App\Http\Controllers\MessageController;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\ChannelPrivacyController;
-use App\Http\Controllers\AdminStatsController;
+
 use App\Http\Controllers\AuthUserController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\ChannelController;
+use App\Http\Controllers\ChannelPrivacyController;
+use App\Http\Controllers\MessageController;
+use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ProjectUserController;
+use App\Http\Controllers\ProjectFileController;
+use App\Http\Controllers\ProjectChatController;
+use App\Http\Controllers\TaskController;
+use App\Http\Controllers\AdminStatsController;
 
 /*
 |--------------------------------------------------------------------------
-| SPA 認証後 API ルート (api ミドルウェア上で動作)
+| 認証前 API エンドポイント（CSRF検証なし）
+|--------------------------------------------------------------------------
+*/
+Route::post('login', [AuthenticatedSessionController::class, 'store']);
+Route::post('register', [RegisteredUserController::class, 'store']);
+Route::post('users', [UserController::class, 'store']); // 認証不要での新規ユーザー作成
+
+/*
+|--------------------------------------------------------------------------
+| 認証後 API エンドポイント
 |--------------------------------------------------------------------------
 */
 Route::middleware([
     EnsureFrontendRequestsAreStateful::class,
     'auth:sanctum',
 ])->group(function () {
+    // ログアウト
+    Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('api.logout');
+
     // 認証済みユーザー情報取得（クロージャ→コントローラへ置換）
     Route::get('user', [AuthUserController::class, 'show']);
 
@@ -54,7 +66,7 @@ Route::middleware([
         ->middleware(\App\Http\Middleware\EnsureChannelViewable::class);
     Route::apiResource('channels', ChannelController::class);
 
-    // メッセージAPIは閲覧可能性を検証
+    // メッセージAPIは閲覧可��性を検証
     Route::get('channels/{channel}/messages', [MessageController::class, 'index'])
         ->middleware(\App\Http\Middleware\EnsureChannelViewable::class);
     Route::post('channels/{channel}/messages', [MessageController::class, 'store'])
@@ -89,18 +101,3 @@ Route::middleware([
     Route::post('/projects/{project}/chat/send', [ProjectChatController::class,'send']);
 
 });
-
-// ここから「認証前」のエンドポイントを定義
-Route::middleware([
-    EnsureFrontendRequestsAreStateful::class,
-])->group(function () {
-    // API プレフィックスでのログイン／ログアウト
-    Route::post('login',  [AuthenticatedSessionController::class, 'store']);
-    Route::post('logout', [AuthenticatedSessionController::class, 'destroy']);
-    // 必要に応じてユーザー登録
-    Route::post('register', [RegisteredUserController::class, 'store']);
-});
-
-// 認証不要で新規ユーザー登録
-Route::post('users', [UserController::class, 'store']);
-

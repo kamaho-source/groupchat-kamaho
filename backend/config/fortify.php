@@ -3,7 +3,6 @@
 use Laravel\Fortify\Features;
 
 return [
-
     /*
     |--------------------------------------------------------------------------
     | Fortify Guard
@@ -49,7 +48,7 @@ return [
     | Fortify Routes Prefix / Subdomain
     |--------------------------------------------------------------------------
     */
-    'prefix' => '/api',
+    'prefix' => '',
 
     'domain' => null,
 
@@ -58,7 +57,7 @@ return [
     | Fortify Routes Middleware
     |--------------------------------------------------------------------------
     */
-    'middleware' => ['api'],
+    'middleware' => ['web'],
 
     /*
     |--------------------------------------------------------------------------
@@ -87,12 +86,14 @@ return [
     | API（SPA）用途なら必要なものだけ有効化してください。
     */
     'features' => [
-        // ユーザー登録
         Features::registration(),
         Features::resetPasswords(),
-       // Features::emailVerification(),
+        Features::emailVerification(),
         Features::updateProfileInformation(),
-        // Features::updatePasswords(), // ← 本人のパスワード変更は無効化（管理者/マネージャー専用APIを使用）
+        Features::updatePasswords(),
+        Features::twoFactorAuthentication([
+            'confirm' => true,
+            'confirmPassword' => true,
+        ]),
     ],
-
 ];
