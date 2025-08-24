@@ -10,6 +10,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import CloseIcon from '@mui/icons-material/Close';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
+import { Bar } from 'react-chartjs-2';
 
 export default function ManagerDashboardPage() {
     const router = useRouter();
@@ -25,6 +26,8 @@ export default function ManagerDashboardPage() {
     const [membersIds, setMembersIds] = React.useState<number[]>([]);
     const [users, setUsers] = React.useState<{ id: number; name: string }[]>([]);
     const [toast, setToast] = React.useState<{ open: boolean; msg: string; sev: 'success' | 'info' | 'warning' | 'error' }>({ open: false, msg: '', sev: 'info' });
+    const [operationStats, setOperationStats] = React.useState<{ activeUsers: number; totalMessages: number } | null>(null);
+    const [activityData, setActivityData] = React.useState<{ labels: string[]; data: number[] } | null>(null);
 
     React.useEffect(() => {
         let mounted = true;
@@ -74,6 +77,34 @@ export default function ManagerDashboardPage() {
         })();
         return () => { mounted = false; };
     }, [authorized]);
+
+    React.useEffect(() => {
+        // 運用状況データを取得
+        (async () => {
+            try {
+                const res = await axios.get('/api/manager/operation-stats');
+                setOperationStats(res.data);
+            } catch (error) {
+                console.error('Failed to fetch operation stats:', error);
+            }
+        })();
+    }, []);
+
+    React.useEffect(() => {
+        let mounted = true;
+        (async () => {
+            try {
+                const res = await axios.get('/api/admin/channel-activity');
+                if (mounted) {
+                    setActivityData(res.data);
+                }
+            } catch (error) {
+                console.error('Failed to fetch activity data:', error);
+                setToast({ open: true, msg: '稼働率データの取得に失敗しました。', sev: 'error' });
+            }
+        })();
+        return () => { mounted = false; };
+    }, []);
 
     const startRename = (ch: { id: number; name: string }) => {
         setEditingChannelId(ch.id);
@@ -136,6 +167,32 @@ export default function ManagerDashboardPage() {
         } catch {
             setToast({ open: true, msg: 'メンバー設定の更新に失敗しました。', sev: 'error' });
         }
+    };
+
+    const activityChartOptions = {
+        responsive: true,
+        plugins: {
+            legend: {
+                position: 'top' as const,
+            },
+            title: {
+                display: true,
+                text: 'チャンネル稼働率',
+            },
+        },
+    };
+
+    const activityChartData = {
+        labels: activityData?.labels || [],
+        datasets: [
+            {
+                label: 'メッセージ数',
+                data: activityData?.data || [],
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1,
+            },
+        ],
     };
 
     if (checking) {
@@ -233,6 +290,31 @@ export default function ManagerDashboardPage() {
                                     </Stack>
                                 );
                             })}
+                        </Stack>
+                    )}
+                </Paper>
+
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="h6" mb={1}>運用状況</Typography>
+                    {operationStats ? (
+                        <Stack spacing={2}>
+                            <Typography>アクティブユーザー数: {operationStats.activeUsers}</Typography>
+                            <Typography>総メッセージ数: {operationStats.totalMessages}</Typography>
+                        </Stack>
+                    ) : (
+                        <Stack alignItems="center" py={2}>
+                            <CircularProgress size={24} />
+                        </Stack>
+                    )}
+                </Paper>
+
+                <Paper variant="outlined" sx={{ p: 2, mt: 4 }}>
+                    <Typography variant="h6" mb={1}>チャンネル稼働率</Typography>
+                    {activityData ? (
+                        <Bar data={activityChartData} options={activityChartOptions} />
+                    ) : (
+                        <Stack alignItems="center" py={2}>
+                            <CircularProgress size={24} />
                         </Stack>
                     )}
                 </Paper>

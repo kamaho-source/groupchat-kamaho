@@ -35,6 +35,10 @@ import CloseIcon from '@mui/icons-material/Close';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
+import { Bar, Line } from 'react-chartjs-2';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 export default function AdminDashboardPage() {
     const router = useRouter();
@@ -69,6 +73,9 @@ export default function AdminDashboardPage() {
     const [membersLoading, setMembersLoading] = React.useState(false);
     const [membersChannelId, setMembersChannelId] = React.useState<number | null>(null);
     const [membersIds, setMembersIds] = React.useState<number[]>([]);
+
+    // チャンネル稼働率
+    const [channelActivity, setChannelActivity] = React.useState<{ labels: string[]; data: number[] } | null>(null);
 
     React.useEffect(() => {
         let mounted = true;
@@ -163,6 +170,104 @@ export default function AdminDashboardPage() {
         })();
         return () => { mounted = false; };
     }, [authorized]);
+
+    React.useEffect(() => {
+        if (!authorized) return;
+        (async () => {
+            try {
+                const res = await axios.get('/api/admin/channel-activity');
+                console.log('Fetched channel activity:', res.data); // デバッグ用ログ
+                setChannelActivity(res.data);
+            } catch (error) {
+                console.error('Failed to fetch channel activity:', error);
+                setToast({ open: true, msg: 'チャンネル稼働率の取得に失敗しました。', sev: 'error' });
+            }
+        })();
+    }, [authorized]);
+
+    const chartData = {
+        labels: ['ユーザー', 'チャンネル', '限定公開', 'メッセージ総数', '本日メッセージ'],
+        datasets: [
+            {
+                label: '統計データ',
+                data: stats ? [
+                    stats.users_count,
+                    stats.channels_count,
+                    stats.private_channels_count,
+                    stats.messages_count,
+                    stats.messages_today
+                ] : [],
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1,
+            },
+        ],
+    };
+
+    const chartOptions = {
+        responsive: true,
+        plugins: {
+            legend: {
+                position: 'top' as const, // 修正: 型エラーを防ぐために'as const'を追加
+            },
+            title: {
+                display: true,
+                text: 'システム統計',
+            },
+        },
+    };
+
+    const activityChartData = {
+        labels: channelActivity?.labels || [],
+        datasets: [
+            {
+                label: 'チャンネル稼働率',
+                data: channelActivity?.data || [],
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1,
+            },
+        ],
+    };
+
+    const activityChartOptions = {
+        responsive: true,
+        plugins: {
+            legend: {
+                position: 'top' as const,
+            },
+            title: {
+                display: true,
+                text: 'チャンネル稼働率',
+            },
+        },
+    };
+
+    const lineChartData = {
+        labels: channelActivity?.labels || [],
+        datasets: [
+            {
+                label: 'チャンネル稼働率',
+                data: channelActivity?.data || [],
+                fill: false,
+                borderColor: 'rgba(75, 192, 192, 1)',
+                tension: 0.1,
+            },
+        ],
+    };
+
+    const lineChartOptions = {
+        responsive: true,
+        plugins: {
+            legend: {
+                position: 'top' as const,
+            },
+            title: {
+                display: true,
+                text: 'チャンネル稼働率 (Line Chart)',
+            },
+        },
+    };
 
     if (checking) {
         return (
@@ -353,20 +458,24 @@ export default function AdminDashboardPage() {
                     ) : !stats ? (
                         <Typography variant="body2" color="text.secondary">統計情報を取得できませんでした。</Typography>
                     ) : (
-                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                            <Chip label={`ユーザー ${stats.users_count}`} />
-                            <Chip label={`チャンネル ${stats.channels_count}`} />
-                            <Chip label={`限定公開 ${stats.private_channels_count}`} />
-                            <Chip label={`メッセージ総数 ${stats.messages_count}`} />
-                            <Chip label={`本日 ${stats.messages_today}`} color="primary" />
-                            {stats.generated_at && (
-                                <Typography variant="caption" color="text.secondary" sx={{ ml: 1, alignSelf: 'center' }}>
-                                    更新: {new Date(stats.generated_at).toLocaleString()}
-                                </Typography>
-                            )}
-                        </Stack>
+                        <>
+                            <Bar data={chartData} options={chartOptions} />
+                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap mt={2}>
+                                <Chip label={`ユーザー ${stats.users_count}`} />
+                                <Chip label={`チャンネル ${stats.channels_count}`} />
+                                <Chip label={`限定公開 ${stats.private_channels_count}`} />
+                                <Chip label={`メッセージ総数 ${stats.messages_count}`} />
+                                <Chip label={`本日 ${stats.messages_today}`} color="primary" />
+                                {stats.generated_at && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1, alignSelf: 'center' }}>
+                                        更新: {new Date(stats.generated_at).toLocaleString()}
+                                    </Typography>
+                                )}
+                            </Stack>
+                        </>
                     )}
                 </Paper>
+
 
                 <Paper variant="outlined" sx={{ p: 2 }}>
                     <Typography variant="h6" mb={1}>ユーザー管理</Typography>
@@ -527,6 +636,28 @@ export default function AdminDashboardPage() {
                                     </Stack>
                                 );
                             })}
+                        </Stack>
+                    )}
+                </Paper>
+
+                <Paper variant="outlined" sx={{ p: 2, mt: 4 }}>
+                    <Typography variant="h6" mb={1}>チャンネル稼働率</Typography>
+                    {channelActivity ? (
+                        <Bar data={activityChartData} options={activityChartOptions} />
+                    ) : (
+                        <Stack alignItems="center" py={2}>
+                            <CircularProgress size={24} />
+                        </Stack>
+                    )}
+                </Paper>
+
+                <Paper variant="outlined" sx={{ p: 2, mt: 4 }}>
+                    <Typography variant="h6" mb={1}>チャンネル稼働率 (Line Chart)</Typography>
+                    {channelActivity ? (
+                        <Line data={lineChartData} options={lineChartOptions} />
+                    ) : (
+                        <Stack alignItems="center" py={2}>
+                            <CircularProgress size={24} />
                         </Stack>
                     )}
                 </Paper>
