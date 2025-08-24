@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import NextLink from 'next/link';
-import axios from '@/lib/axios';
+import { useAuth } from '@/lib/auth';
 
 import {
     Container,
@@ -29,6 +29,7 @@ import {
 
 export default function LoginPage() {
     const router = useRouter();
+    const { login, authenticated } = useAuth();
 
     const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
@@ -39,34 +40,31 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        axios
-            .get('/sanctum/csrf-cookie')
-            .catch(console.error)
-            .finally(() => setMounted(true));
+        setMounted(true);
     }, []);
+
+    // 既に認証済みの場合はリダイレクト
+    useEffect(() => {
+        if (authenticated) {
+            router.replace('/');
+        }
+    }, [authenticated, router]);
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError(null);
         setLoading(true);
+
         try {
-            await axios.get('/sanctum/csrf-cookie');
-            await axios.post('api/login', { user_id: identifier, password });
-            router.replace('/');
-        } catch (err: any) {
-            if (axios.isAxiosError(err) && err.response) {
-                const { status, data } = err.response;
-                if (status === 401) {
-                    setError('ユーザーIDまたはパスワードが正しくありません');
-                } else if (status === 422 && (data as any).errors) {
-                    const key = Object.keys((data as any).errors)[0];
-                    setError((data as any).errors[key][0]);
-                } else {
-                    setError((data as any).message || 'ログインに失敗しました');
-                }
+            const result = await login(identifier, password);
+            
+            if (result.success) {
+                router.replace('/');
             } else {
-                setError('ネットワークエラーが発生しました');
+                setError(result.message);
             }
+        } catch (err: any) {
+            setError('ログインに失敗しました');
         } finally {
             setLoading(false);
         }

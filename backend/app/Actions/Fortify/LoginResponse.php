@@ -2,34 +2,33 @@
 
 namespace App\Actions\Fortify;
 
-use Illuminate\Http\Request;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class LoginResponse implements LoginResponseContract
 {
     /**
-     * Handle the successful login response.
+     * Create an HTTP response that represents the object.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @return mixed
+     * @return \Symfony\Component\HttpFoundation\Response
      */
     public function toResponse($request)
     {
-        // 認証済みユーザー
-        $user = $request->user();
+        $user = auth()->user();
 
-        // Sanctum パーソナルアクセストークンを発行
-        $token = $user->createToken('api-token')->plainTextToken;
-
-        // JSON リクエストなら JSON で返す
-        if ($request->wantsJson()) {
-            return response()->json([
-                'user'  => $user,
-                'token' => $token,
-            ], 200);
-        }
-
-        // それ以外はデフォルトのリダイレクト
-        return redirect()->intended(config('fortify.home'));
+        return new JsonResponse([
+            'message' => 'ログインに成功しました',
+            'user' => [
+                'id' => $user->id,
+                'user_id' => $user->user_id,
+                'name' => $user->name,
+                'role' => $user->role,
+                'icon_name' => $user->icon_name,
+                'avatar_path' => $user->avatar_path,
+            ],
+            'authenticated' => true,
+        ], 200);
     }
 }
