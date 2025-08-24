@@ -1,10 +1,11 @@
 // lib/axios.ts
 import axios from 'axios';
 
-axios.defaults.baseURL         = '';       // ← Next.js の rewrites 経由で Laravel API にプロキシ
+// Next.js rewrites 経由で backend へ到達するため baseURL は空
+axios.defaults.baseURL = '';
 axios.defaults.withCredentials = true;
-axios.defaults.xsrfCookieName  = 'XSRF-TOKEN';
-axios.defaults.xsrfHeaderName  = 'X-XSRF-TOKEN';
+axios.defaults.xsrfCookieName = 'XSRF-TOKEN';
+axios.defaults.xsrfHeaderName = 'X-XSRF-TOKEN';
 axios.defaults.headers.common['Accept'] = 'application/json';
 
 // 認証切れ（401/419）検知 → /login にリダイレクト
