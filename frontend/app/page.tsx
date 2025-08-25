@@ -470,13 +470,14 @@ const MessageInput: React.FC<{
     onClickUpload: () => void;
     onSend: () => void;
     isSending?: boolean;
+    disabled?: boolean;
     inputRef?:
         | React.RefObject<HTMLTextAreaElement | null>
         | React.MutableRefObject<HTMLTextAreaElement | null>;
     attachedFile?: File | null;
     onAttachFile?: (f: File) => void;
     onRemoveAttachment?: () => void;
-}> = ({ value, onChange, onKeyDown, onClickUpload, onSend, isSending, inputRef, attachedFile, onAttachFile, onRemoveAttachment }) => {
+}> = ({ value, onChange, onKeyDown, onClickUpload, onSend, isSending, disabled = false, inputRef, attachedFile, onAttachFile, onRemoveAttachment }) => {
     const formatBytes = (bytes: number) => {
         if (!bytes && bytes !== 0) return '';
         const k = 1024;
@@ -503,7 +504,7 @@ const MessageInput: React.FC<{
     const onDropArea = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
         e.stopPropagation();
-        if (isSending) return;
+        if (isSending || disabled) return;
         if (e.dataTransfer?.files?.length) {
             handleFiles(e.dataTransfer.files);
         }
@@ -515,7 +516,7 @@ const MessageInput: React.FC<{
     };
 
     const onPasteArea = (e: React.ClipboardEvent<HTMLDivElement>) => {
-        if (isSending) return;
+        if (isSending || disabled) return;
         const items = e.clipboardData?.items;
         if (!items) return;
         const files: File[] = [];
@@ -596,21 +597,22 @@ const MessageInput: React.FC<{
                     multiline
                     minRows={4}
                     value={value}
-                    placeholder="メッセージを入力...（Ctrl/⌘ + Enterで送信、Enterは改行）\nファイルはクリップ/ドラッグ&ドロップ/ペーストでも添付できます。"
+                    placeholder={disabled ? "このチャンネルは閲覧専用です。メッセージを送信することはできません。" : "メッセージを入力...（Ctrl/⌘ + Enterで送信、Enterは改行）\nファイルはクリップ/ドラッグ&ドロップ/ペーストでも添付できます。"}
                     onChange={(e) => onChange(e.target.value)}
                     onKeyDown={onKeyDown}
                     onPaste={onPasteArea}
                     inputRef={inputRef as any}
+                    disabled={disabled}
                 />
                 <Stack direction="row" spacing={1}>
-                    <Tooltip title="ファイルを添付">
+                    <Tooltip title={disabled ? "閲覧専用のため使用できません" : "ファイルを添付"}>
                         <span>
-                            <IconButton aria-label="ファイルを添付" onClick={onClickUpload} disabled={isSending}>
+                            <IconButton aria-label="ファイルを添付" onClick={onClickUpload} disabled={isSending || disabled}>
                                 <UploadIcon />
                             </IconButton>
                         </span>
                     </Tooltip>
-                    <Button variant="contained" endIcon={<SendIcon />} onClick={onSend} disabled={isSending}>
+                    <Button variant="contained" endIcon={<SendIcon />} onClick={onSend} disabled={isSending || disabled}>
                         送信
                     </Button>
                 </Stack>
@@ -674,6 +676,7 @@ export default function HomePage() {
     const [currentUserId, setCurrentUserId] = useState<number | null>(null);
     const [isAdmin, setIsAdmin] = useState<boolean>(false);
     const [isManager, setIsManager] = useState<boolean>(false);
+    const [isViewerOnly, setIsViewerOnly] = useState<boolean>(false);
     const [isAuthChecked, setIsAuthChecked] = useState(false);
 
     // アクセス設定ダイアログ
@@ -864,13 +867,19 @@ export default function HomePage() {
             const manager =
                 res.data?.role === 'manager' ||
                 (Array.isArray(res.data?.roles) && res.data.roles.includes('manager'));
+            // 閲覧専用ユーザーの判定
+            const viewer =
+                res.data?.role === 'viewer' ||
+                (Array.isArray(res.data?.roles) && res.data.roles.includes('viewer'));
             setIsAdmin(Boolean(admin));
             setIsManager(Boolean(manager));
+            setIsViewerOnly(Boolean(viewer));
         } catch {
             setCurrentUser(null);
             setCurrentUserId(null);
             setIsAdmin(false);
             setIsManager(false);
+            setIsViewerOnly(false);
         } finally {
             setIsAuthChecked(true);
         }
@@ -1781,6 +1790,7 @@ export default function HomePage() {
                     onClickUpload={triggerFileSelect}
                     onSend={sendMessage}
                     isSending={sending}
+                    disabled={isViewerOnly}
                     inputRef={editorRef}
                     attachedFile={file}
                     onAttachFile={(f) => setFile(f)}
