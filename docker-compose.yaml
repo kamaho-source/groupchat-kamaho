@@ -8,8 +8,6 @@ services:
       - "8000:80"
     environment:
       TZ: "Asia/Tokyo"
-      APP_ENV: production
-      APP_DEBUG: "false"
       LOG_LEVEL: warning
       SESSION_DRIVER: file
       SANCTUM_STATEFUL_DOMAINS: localhost,localhost:80,localhost:3000,host.docker.internal:8000
