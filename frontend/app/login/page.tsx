@@ -92,8 +92,6 @@ export default function LoginPage() {
                             ログイン
                         </Typography>
 
-                        {error && <Alert severity="error">{error}</Alert>}
-
                         <TextField
                             id="identifier"
                             name="user_id"
