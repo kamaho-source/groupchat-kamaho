@@ -19,7 +19,17 @@ RUN docker-php-ext-install bcmath \
     && docker-php-ext-install opcache \
     && pecl install apcu \
     && docker-php-ext-enable apcu
-# Install Composer \
+
+# xdebugインストール・設定
+RUN pecl install xdebug \
+    && docker-php-ext-enable xdebug \
+    && echo "zend_extension=xdebug.so" > /usr/local/etc/php/conf.d/20-xdebug.ini \
+    && echo "xdebug.mode=develop,debug" >> /usr/local/etc/php/conf.d/20-xdebug.ini \
+    && echo "xdebug.start_with_request=yes" >> /usr/local/etc/php/conf.d/20-xdebug.ini \
+    && echo "xdebug.client_host=host.docker.internal" >> /usr/local/etc/php/conf.d/20-xdebug.ini \
+    && echo "xdebug.client_port=9003" >> /usr/local/etc/php/conf.d/20-xdebug.ini
+
+# Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Enable Apache modules
@@ -82,4 +92,4 @@ RUN php artisan storage:link || true \
 # Startup script to recreate storage dirs after volume mount
 COPY ./docker/start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh
-CMD ["/usr/local/bin/start.sh"]
+CMD ["/usr/local/bin/start.sh"]　

@@ -10,13 +10,14 @@ import SaveIcon from '@mui/icons-material/Save';
 import CloseIcon from '@mui/icons-material/Close';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
+import LockResetIcon from '@mui/icons-material/LockReset';
 import { Bar } from 'react-chartjs-2';
 
 export default function ManagerDashboardPage() {
     const router = useRouter();
     const [checking, setChecking] = React.useState(true);
     const [authorized, setAuthorized] = React.useState(false);
-    const [channels, setChannels] = React.useState<{ id: number; name: string; is_private?: boolean }[]>([]);
+    const [channels, setChannels] = React.useState<{ id: number; name: string; is_private?: boolean; posting_restricted?: boolean }[]>([]);
     const [channelsLoading, setChannelsLoading] = React.useState(true);
     const [editingChannelId, setEditingChannelId] = React.useState<number | null>(null);
     const [editingChannelName, setEditingChannelName] = React.useState<string>('');
@@ -134,6 +135,23 @@ export default function ManagerDashboardPage() {
             setToast({ open: true, msg: '公開設定の更新に失敗しました。', sev: 'error' });
         }
     };
+
+    // 投稿制限の切替（管理者/マネージャーのみ投稿）
+    const togglePostingRestricted = async (ch: { id: number; name: string; posting_restricted?: boolean; is_private?: boolean }) => {
+        try {
+            const next = !ch.posting_restricted;
+            await axios.put(`/api/channels/${ch.id}/privacy`, {
+                is_private: ch.is_private || false,
+                member_ids: [],
+                posting_restricted: next,
+            });
+            setChannels((prev) => prev.map((c) => (c.id === ch.id ? { ...c, posting_restricted: next } : c)));
+            setToast({ open: true, msg: `投稿制限を${next ? '有効' : '無効'}にしました。`, sev: 'success' });
+        } catch {
+            setToast({ open: true, msg: '投稿制限の更新に失敗しました。', sev: 'error' });
+        }
+    };
+
     const openMembers = async (ch: { id: number; name: string }) => {
         setMembersOpen(true);
         setMembersChannelId(ch.id);
@@ -274,19 +292,25 @@ export default function ManagerDashboardPage() {
                                                 color={ch.is_private ? 'warning' : 'default'}
                                                 sx={{ ml: 1 }}
                                             />
-                                        </Stack>
-                                        <Stack direction="row" spacing={1}>
-                                            <IconButton onClick={() => togglePrivate(ch)} aria-label="公開設定を切替">
-                                                {ch.is_private ? <LockIcon /> : <LockOpenIcon />}
-                                            </IconButton>
-                                            <Button
-                                                size="small"
-                                                onClick={() => openMembers(ch)}
-                                                disabled={!ch.is_private}
-                                            >
-                                                メンバー
-                                            </Button>
-                                        </Stack>
+                                            {ch.posting_restricted ? (
+                                                <Chip size="small" label="投稿制限: 管理者/マネージャー" color="error" sx={{ ml: 1 }} />
+                                            ) : null}
+                                         </Stack>
+                                         <Stack direction="row" spacing={1}>
+                                             <IconButton onClick={() => togglePrivate(ch)} aria-label="公開設定を切替">
+                                                 {ch.is_private ? <LockIcon /> : <LockOpenIcon />}
+                                             </IconButton>
+                                             <IconButton onClick={() => togglePostingRestricted(ch)} aria-label="投稿制限を切替">
+                                                 <LockResetIcon />
+                                             </IconButton>
+                                             <Button
+                                                 size="small"
+                                                 onClick={() => openMembers(ch)}
+                                                 disabled={!ch.is_private}
+                                             >
+                                                 メンバー
+                                             </Button>
+                                         </Stack>
                                     </Stack>
                                 );
                             })}

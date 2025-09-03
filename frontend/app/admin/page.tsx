@@ -35,10 +35,11 @@ import CloseIcon from '@mui/icons-material/Close';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
+import LockResetIcon from '@mui/icons-material/LockReset';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend);
 
 export default function AdminDashboardPage() {
     const router = useRouter();
@@ -64,7 +65,8 @@ export default function AdminDashboardPage() {
     } | null>(null);
 
     // チャンネル管理
-    type ChannelRow = { id: number; name: string; is_private?: boolean };
+    // posting_restricted を含めた型定義（重複宣言を排除）
+    type ChannelRow = { id: number; name: string; is_private?: boolean; posting_restricted?: boolean };
     const [channels, setChannels] = React.useState<ChannelRow[]>([]);
     const [channelsLoading, setChannelsLoading] = React.useState(true);
     const [editingChannelId, setEditingChannelId] = React.useState<number | null>(null);
@@ -76,6 +78,9 @@ export default function AdminDashboardPage() {
 
     // チャンネル稼働率
     const [channelActivity, setChannelActivity] = React.useState<{ labels: string[]; data: number[] } | null>(null);
+
+    // 運用率（日次%）
+    const [utilization, setUtilization] = React.useState<{ labels: string[]; data: number[] } | null>(null);
 
     React.useEffect(() => {
         let mounted = true;
@@ -182,6 +187,13 @@ export default function AdminDashboardPage() {
                 console.error('Failed to fetch channel activity:', error);
                 setToast({ open: true, msg: 'チャンネル稼働率の取得に失敗しました。', sev: 'error' });
             }
+            try {
+                const ures = await axios.get('/api/admin/utilization');
+                setUtilization(ures.data);
+            } catch (error) {
+                console.error('Failed to fetch utilization:', error);
+                setToast({ open: true, msg: '運用率の取得に失敗しました。', sev: 'error' });
+            }
         })();
     }, [authorized]);
 
@@ -254,6 +266,36 @@ export default function AdminDashboardPage() {
                 tension: 0.1,
             },
         ],
+    };
+
+    const utilizationChartData = {
+        labels: utilization?.labels || [],
+        datasets: [
+            {
+                label: '運用率（%）',
+                data: utilization?.data || [],
+                fill: false,
+                borderColor: 'rgba(255, 99, 132, 1)',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                tension: 0.2,
+            },
+        ],
+    };
+
+    const utilizationChartOptions = {
+        responsive: true,
+        scales: {
+            y: { beginAtZero: true, max: 100 }
+        },
+        plugins: {
+            legend: { position: 'top' as const },
+            title: { display: true, text: '日次運用率（全チャンネルのうち稼働した割合）' },
+            tooltip: {
+                callbacks: {
+                    label: (ctx: any) => `${ctx.parsed.y}%`
+                }
+            }
+        },
     };
 
     const lineChartOptions = {
@@ -344,6 +386,23 @@ export default function AdminDashboardPage() {
             setToast({ open: true, msg: `チャンネルを${nextPrivate ? '限定公開' : '公開'}に変更しました。`, sev: 'success' });
         } catch {
             setToast({ open: true, msg: '公開設定の更新に失敗しました。', sev: 'error' });
+        }
+    };
+
+    // 投稿制限の切替（管理者/マネージャーのみ投稿）
+    const togglePostingRestricted = async (ch: ChannelRow) => {
+        try {
+            const next = !ch.posting_restricted;
+            await axios.put(`/api/channels/${ch.id}/privacy`, {
+                // 保守的に既存の is_private を維持（サーバ側で適切に処理）
+                is_private: ch.is_private || false,
+                member_ids: [],
+                posting_restricted: next,
+            });
+            setChannels((prev) => prev.map((c) => (c.id === ch.id ? { ...c, posting_restricted: next } : c)));
+            setToast({ open: true, msg: `投稿制限を${next ? '有効' : '無効'}にしました。`, sev: 'success' });
+        } catch {
+            setToast({ open: true, msg: '投稿制限の更新に失敗しました。', sev: 'error' });
         }
     };
 
@@ -616,11 +675,17 @@ export default function AdminDashboardPage() {
                                                 color={ch.is_private ? 'warning' : 'default'}
                                                 sx={{ ml: 1 }}
                                             />
+                                            {ch.posting_restricted ? (
+                                                <Chip size="small" label="投稿制限: 管理者/マネージャー" color="error" sx={{ ml: 1 }} />
+                                            ) : null}
                                         </Stack>
 
                                         <Stack direction="row" spacing={1}>
                                             <IconButton onClick={() => togglePrivate(ch)} aria-label="公開設定を切替">
                                                 {ch.is_private ? <LockIcon /> : <LockOpenIcon />}
+                                            </IconButton>
+                                            <IconButton onClick={() => togglePostingRestricted(ch)} aria-label="投稿制限を切替">
+                                                <LockResetIcon />
                                             </IconButton>
                                             <Button
                                                 size="small"
@@ -644,6 +709,17 @@ export default function AdminDashboardPage() {
                     <Typography variant="h6" mb={1}>チャンネル稼働率</Typography>
                     {channelActivity ? (
                         <Bar data={activityChartData} options={activityChartOptions} />
+                    ) : (
+                        <Stack alignItems="center" py={2}>
+                            <CircularProgress size={24} />
+                        </Stack>
+                    )}
+                </Paper>
+
+                <Paper variant="outlined" sx={{ p: 2, mt: 4 }}>
+                    <Typography variant="h6" mb={1}>日次運用率</Typography>
+                    {utilization ? (
+                        <Line data={utilizationChartData} options={utilizationChartOptions} />
                     ) : (
                         <Stack alignItems="center" py={2}>
                             <CircularProgress size={24} />
