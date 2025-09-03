@@ -71,6 +71,7 @@ interface Channel {
     id: number;
     name: string;
     is_private?: boolean;
+    posting_restricted?: boolean; // 追加: 投稿を管理者/マネージャーのみに制限するフラグ
 }
 
 // ------------------------------
@@ -98,7 +99,7 @@ const copyToClipboard = async (text: string) => {
 // 正規表現エスケープ
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// 画像/アイコンの相対パスをURLに解決するヘルパー（Next.js rewrites 前提）
+// 画像/アイコンの相対パスをURLに解決するヘ�����パー（Next.js rewrites 前提）
 // - すでに絶対URLなら、そのパスが /storage/ なら pathname(+search) に落としてプロキシを使う
 // - 先頭 "/" の相対URLはそのまま（/storage/... は next.config.ts でバックエンドへプロキシ）
 // - "public/..." は "/storage/..." に変換
@@ -312,7 +313,7 @@ const MessageItem: React.FC<{
         ) : avatarNode;
     }
 
-    // 添付ファイルURLを表示用に解決
+    // 添付ファイルURLを���示用に解決
     const fileResolvedUrl = toAssetUrl(msg.file_url);
 
     return (
@@ -401,13 +402,13 @@ const ChannelList: React.FC<{
             const otherId = currentUserId === a ? b : currentUserId === b ? a : null;
             if (otherId != null) {
                 const other = allUsers.find(u => u.id === otherId);
-                if (other) return `@ ${other.name} 🔒`;
-                // ユーザー名が取得できない場合は退会ユーザーと表示
-                return `@ 退会ユーザー 🔒`;
+                if (other) return `@ ${other.name} 🔒${ch.posting_restricted ? ' ⛔' : ''}`;
+                // ユーザー名が取得できな��場合は退会ユーザーと表示
+                return `@ 退会ユーザー 🔒${ch.posting_restricted ? ' ⛔' : ''}`;
             }
-            return `DM ${a}-${b} 🔒`;
+            return `DM ${a}-${b} 🔒${ch.posting_restricted ? ' ⛔' : ''}`;
         }
-        return `# ${ch.name}${ch.is_private ? ' 🔒' : ''}`;
+        return `# ${ch.name}${ch.is_private ? ' 🔒' : ''}${ch.posting_restricted ? ' ⛔' : ''}`;
     };
 
     return (
@@ -683,6 +684,7 @@ export default function HomePage() {
     const [privacyOpen, setPrivacyOpen] = useState(false);
     const [privacySaving, setPrivacySaving] = useState(false);
     const [privacyIsPrivate, setPrivacyIsPrivate] = useState<boolean>(false);
+    const [privacyPostingRestricted, setPrivacyPostingRestricted] = useState<boolean>(false);
     const [privacyMemberIds, setPrivacyMemberIds] = useState<number[]>([]);
     const [allUsers, setAllUsers] = useState<Array<{ id: number; name: string }>>([]);
     const [currentChannelMemberIds, setCurrentChannelMemberIds] = useState<number[]>([]);
@@ -690,15 +692,17 @@ export default function HomePage() {
     const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
     const [editedContent, setEditedContent] = useState<string>('');
 
-    // ▼▼ チャンネル名ドロップダウン（既存） ▼▼
-    const [channelMenuAnchorEl, setChannelMenuAnchorEl] = useState<null | HTMLElement>(null);
-    const openChannelMenu = Boolean(channelMenuAnchorEl);
-    const handleOpenChannelMenu = (e: React.MouseEvent<HTMLElement>) => setChannelMenuAnchorEl(e.currentTarget);
-    const handleCloseChannelMenu = () => setChannelMenuAnchorEl(null);
-    const handleSelectChannel = (id: number) => {
-        setCurrentChannel(id);
-        handleCloseChannelMenu();
-    };
+    // ▼▼ チャンネル名ドロップダウン（既存） ��▼
+    // const [channelMenuAnchorEl, setChannelMenuAnchorEl] = useState<null | HTMLElement>(null);
+    // const openChannelMenu = Boolean(channelMenuAnchorEl);
+    // const handleOpenChannelMenu = (e: React.MouseEvent<HTMLElement>) => setChannelMenuAnchorEl(e.currentTarget);
+    // const handleCloseChannelMenu = () => setChannelMenuAnchorEl(null);
+    // const handleSelectChannel = (id: number) => {
+    //     setCurrentChannel(id);
+    //     handleCloseChannelMenu();
+    // };
+    // チャンネル��のドロップダウンは UI をサイドバーに統合したため、
+    // ここでの状態管理は不要になりました（サイドバーでチャンネル選択してください）。
     // ▲▲ ここまで ▲▲
 
     // ▼▼ ユーザー名ドロップダウン（新規） ▼▼
@@ -731,7 +735,7 @@ export default function HomePage() {
 
         try {
             await axios.delete(`/api/channels/${currentChannel}`);
-            setToast({ open: true, msg: `チャンネル「${name}」を削除しました。`, sev: 'success' });
+            setToast({ open: true, msg: `チャン��ル「${name}」を削除しました。`, sev: 'success' });
 
             // リスト更新 & 選択チャンネル切替
             setChannels(prev => prev.filter(c => c.id !== currentChannel));
@@ -787,7 +791,7 @@ export default function HomePage() {
                 at = i;
                 break;
             }
-            // 区切り文字に当たったら打ち切り
+            // 区切り文字に当たった��打ち切り
             if (/\s/.test(ch)) break;
         }
         if (at < 0) {
@@ -859,7 +863,7 @@ export default function HomePage() {
             const res = await axios.get('/api/user', { params: { _: Date.now() } });
             setCurrentUser(res.data?.name ?? null);
             setCurrentUserId(Number(res.data?.id) || null);
-            // 管理者/マネージャー判定（APIの形に応じて調整）
+            // 管理者/��ネージャー判定（APIの形に応じて調整）
             const admin =
                 !!res.data?.is_admin ||
                 res.data?.role === 'admin' ||
@@ -1017,7 +1021,9 @@ export default function HomePage() {
     const fetchChannels = async () => {
         try {
             const res = await axios.get('/api/channels');
-            setChannels(res.data);
+            // Normalize posting_restricted to boolean to ensure UI can read it
+            const list = Array.isArray(res.data) ? res.data : [];
+            setChannels(list.map((c: any) => ({ ...(c || {}), posting_restricted: Boolean(c?.posting_restricted) })));
         } catch {
             setToast({ open: true, msg: 'チャンネル取得に失敗しました。', sev: 'error' });
         }
@@ -1087,7 +1093,7 @@ export default function HomePage() {
                 }
                 setProfiles(map);
             } catch {
-                // 取得失敗時は初期の頭文字表示にフォールバック
+                // 取得失敗時は初期の頭���字表示にフォールバック
             }
         })();
     }, [currentUser]);
@@ -1250,7 +1256,7 @@ export default function HomePage() {
             const res = await axios.put(`/api/channels/${currentChannel}/messages/${targetId}`, { content: nextContent });
             const updated = res.data;
 
-            // 3) 応答内容で確定反映（サーバ側で更新されたメタも適用）
+            // 3) 応答内容で確定反映（サーバ側で更新さ���たメタも適用）
             setMessages((cur) => cur.map((m) => (m.id === targetId ? { ...m, ...updated } : m)));
             setToast({ open: true, msg: 'メッセージを更新しました。', sev: 'success' });
         } catch {
@@ -1276,6 +1282,8 @@ export default function HomePage() {
             setPrivacyOpen(true);
             const res = await axios.get(`/api/channels/${currentChannel}/members`);
             setPrivacyIsPrivate(Boolean(res.data?.is_private));
+            // posting_restricted は members エンドポイントが返す場合とチャンネル情報から取得する場合がある
+            setPrivacyPostingRestricted(Boolean(res.data?.posting_restricted || channels.find(c => c.id === currentChannel)?.posting_restricted));
             setPrivacyMemberIds((res.data?.member_ids || []).map((n: any) => Number(n)));
             if (allUsers.length === 0) {
                 const ures = await axios.get('/api/users');
@@ -1283,7 +1291,7 @@ export default function HomePage() {
                 setAllUsers(list);
             }
         } catch {
-            setToast({ open: true, msg: 'アクセス設定の取得に失敗しました。', sev: 'error' });
+            setToast({ open: true, msg: 'アクセス設定の取得に失敗しました��', sev: 'error' });
             setPrivacyOpen(false);
         }
     };
@@ -1425,7 +1433,7 @@ export default function HomePage() {
     // ファイル選択起動
     const triggerFileSelect = () => fileInputRef.current?.click();
 
-    // Drawer コンテンツ
+    // Drawer コンテン���
     // 自分が当事者の DM のみ表示する（dm:<smallId>-<bigId>）
     const filteredChannels = channels.filter((c) => {
         const m = /^dm:(\d+)-(\d+)$/.exec(c.name || '');
@@ -1489,7 +1497,7 @@ export default function HomePage() {
                     {/* チャンネル名の単純表示（ドロップダウンは削除） */}
                     <Box sx={{ flexGrow: 1 }}>
                         <Typography variant="h6" component="div" sx={{ fontWeight: 700 }}>
-                            # {currentChannelName}{isPrivateCurrent ? ' 🔒' : ''}
+                            # {currentChannelName}{isPrivateCurrent ? ' 🔒' : ''}{currentChannelObj?.posting_restricted ? ' ⛔' : ''}
                         </Typography>
                     </Box>
 
@@ -1790,7 +1798,7 @@ export default function HomePage() {
                     onClickUpload={triggerFileSelect}
                     onSend={sendMessage}
                     isSending={sending}
-                    disabled={isViewerOnly}
+                    disabled={isViewerOnly || (Boolean(currentChannelObj?.posting_restricted) && !(isAdmin || isManager))}
                     inputRef={editorRef}
                     attachedFile={file}
                     onAttachFile={(f) => setFile(f)}
@@ -1841,6 +1849,10 @@ export default function HomePage() {
                             isPrivate={privacyIsPrivate}
                             onChange={setPrivacyIsPrivate}
                         />
+                        <FormControlLabel
+                            control={<Switch checked={privacyPostingRestricted} onChange={(e) => setPrivacyPostingRestricted(e.target.checked)} />}
+                            label="投稿制限: 管理者/マネージャーのみ"
+                        />
                         {privacyIsPrivate ? (
                             <FormGroup>
                                 {allUsers.map((u) => (
@@ -1877,6 +1889,7 @@ export default function HomePage() {
                                 await axios.put(`/api/channels/${currentChannel}/privacy`, {
                                     is_private: privacyIsPrivate,
                                     member_ids: privacyIsPrivate ? privacyMemberIds : [],
+                                    posting_restricted: privacyPostingRestricted,
                                 });
                                 setToast({ open: true, msg: 'アクセス設定を更新しました。', sev: 'success' });
                                 setPrivacyOpen(false);

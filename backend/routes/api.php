@@ -57,8 +57,10 @@ Route::middleware([
 
     // 管理者向け統計
     Route::get('admin/stats', [AdminStatsController::class, 'index']);
-    // チャンネル稼働率取得
+    // チャンネル稼働率取得（メッセージ数ベース）
     Route::get('admin/channel-activity', [AdminStatsController::class, 'channelActivity']);
+    // 運用率（日次%）
+    Route::get('admin/utilization', [AdminStatsController::class, 'utilization']);
     // プライバシー設定（管理者/マネージャー）
     Route::get('channels/{channel}/members', [ChannelPrivacyController::class, 'members']);
     Route::put('channels/{channel}/privacy', [ChannelPrivacyController::class, 'updatePrivacy']);
