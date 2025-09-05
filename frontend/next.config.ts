@@ -2,7 +2,7 @@ import { NextConfig } from 'next';
 
 // 開発環境ではlocalhost、本番環境ではコンテナ名を使用
 const HOST = process.env.NODE_ENV === 'production'
-    ? 'http://groupchat-kamaho-app'
+    ? 'http://groupchat-kamaho-app:8000'
     : 'http://localhost:8000';
 
 const nextConfig: NextConfig = {
