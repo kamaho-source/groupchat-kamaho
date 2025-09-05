@@ -6,7 +6,7 @@ const ENV_BACKEND = process.env.BACKEND_ORIGIN || process.env.NEXT_PUBLIC_BACKEN
 const HOST = ENV_BACKEND
     ? ENV_BACKEND
     : (process.env.NODE_ENV === 'production'
-        ? 'http://groupchat-kamaho-app:8000'
+        ? 'http://host.docker.internal:8000'
         : (process.env.USE_DOCKER_BACKEND === '1'
             ? 'http://host.docker.internal:8000'
             : 'http://localhost:8000'
