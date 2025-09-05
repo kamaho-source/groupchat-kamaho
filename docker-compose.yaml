@@ -11,7 +11,7 @@ services:
       LOG_LEVEL: warning
       SESSION_DRIVER: file
       SANCTUM_STATEFUL_DOMAINS: localhost,localhost:80,localhost:3000,host.docker.internal:8000
-      FRONTEND_URLS: http://localhost
+      FRONTEND_URLS: http://localhost,http://localhost:3000
     # 🔽 ローカルと同期（Laravel プロジェクトのパスに合わせて調整）
     volumes:
       - ./backend:/var/www/html:cached              # ← プロジェクト一式を同期（macOSなら :cached / :delegated 推奨）
