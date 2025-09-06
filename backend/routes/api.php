@@ -32,6 +32,7 @@ Route::post('users', [UserController::class, 'store']); // 認証不要での新
 |--------------------------------------------------------------------------
 */
 Route::middleware([
+    EnsureFrontendRequestsAreStateful::class,
     'auth:sanctum',
 ])->group(function () {
     // ログアウト
