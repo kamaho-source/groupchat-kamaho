@@ -24,19 +24,16 @@ use App\Http\Controllers\AdminStatsController;
 */
 Route::post('login', [AuthenticatedSessionController::class, 'store']);
 Route::post('register', [RegisteredUserController::class, 'store']);
-Route::post('users', [UserController::class, 'store'])->middleware('auth:sanctum'); // 認証不要での新規ユーザー作成
+Route::post('users', [UserController::class, 'store']); // 認証不要での新規ユーザー作成
 
 /*
 |--------------------------------------------------------------------------
 | 認証後 API エンドポイント
 |--------------------------------------------------------------------------
 */
-/*
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
-});
-*/
-/*
+Route::middleware([
+    'auth:sanctum',
+])->group(function () {
     // ログアウト
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('api.logout');
 
@@ -107,4 +104,3 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     Route::post('/projects/{project}/chat/send', [ProjectChatController::class,'send']);
 
 });
-*/
