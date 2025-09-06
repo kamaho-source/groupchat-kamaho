@@ -1,48 +1,103 @@
 import { NextConfig } from 'next';
 
-// 環境変数があれば最優先（例: BACKEND_ORIGIN=http://192.168.24.200:8000）
-const HOST =
-    process.env.BACKEND_ORIGIN ||
-    process.env.NEXT_PUBLIC_BACKEND_ORIGIN ||
-    (process.env.NODE_ENV === 'production'
-        ? 'http://groupchat-kamaho-app:8000'   // 本番: コンテナ名＋ポート
-        : 'http://192.168.24.200:8000');       // 開発: IPのAPI
+// 開発環境ではlocalhost、本番環境ではコンテナ名を使用
+// 追加: 環境変数 BACKEND_ORIGIN/NEXT_PUBLIC_BACKEND_ORIGIN があればそれを優先
+const ENV_BACKEND = process.env.BACKEND_ORIGIN || process.env.NEXT_PUBLIC_BACKEND_ORIGIN;
+// next.config.ts 抜粋（任意）
+const HOST = process.env.BACKEND_ORIGIN
+    ?? (process.env.NODE_ENV === 'production'
+        ? 'http://groupchat-kamaho-app:8000'
+        : 'http://192.168.24.200:8000'); // ← ここだけ差し替え
+
 
 const nextConfig: NextConfig = {
     async rewrites() {
         return [
-            // Sanctum CSRF
-            { source: '/sanctum/:path*', destination: `${HOST}/sanctum/:path*` },
-
-            // 認証系は「/api/*」ではなく web ルートへ中継（★重要）
-            { source: '/login',    destination: `${HOST}/login` },
-            { source: '/logout',   destination: `${HOST}/logout` },
-            { source: '/register', destination: `${HOST}/register` },
-
-            // 認証済みAPI
-            { source: '/api/user',   destination: `${HOST}/api/user` },
-            { source: '/api/:path*', destination: `${HOST}/api/:path*` },
-
-            // Broadcasting 認証
-            { source: '/broadcasting/auth', destination: `${HOST}/broadcasting/auth` },
-
-            // ストレージ
-            { source: '/storage/:path*', destination: `${HOST}/storage/:path*` },
+            // Sanctum の CSRF Cookie
+            {
+                source: '/sanctum/:path*',
+                destination: `${HOST}/sanctum/:path*`,
+            },
+            // 認証前：ログイン／ログアウト／登録
+            {
+                source: '/api/login',
+                destination: `${HOST}/api/login`,
+            },
+            {
+                source: '/api/logout',
+                destination: `${HOST}/api/logout`,
+            },
+            {
+                source: '/api/register',
+                destination: `${HOST}/api/register`,
+            },
+            // 認証済み：ユーザー情報取得
+            {
+                source: '/api/user',
+                destination: `${HOST}/api/user`,
+            },
+            // Broadcasting 認証（PresenceChannel / PrivateChannel 用）
+            {
+                source: '/broadcasting/auth',
+                destination: `${HOST}/broadcasting/auth`,
+            },
+            // その他の Laravel API
+            {
+                source: '/api/:path*',
+                destination: `${HOST}/api/:path*`,
+            },
+            // ファイルストレージへのリライト
+            {
+                source: '/storage/:path*',
+                destination: `${HOST}/storage/:path*`,
+            },
         ];
     },
 
-    // 同一オリジン中継のためCORSヘッダーは不要（Cookie同送と * は両立しない）
+    // CORS設定（開発環境でのみ有効）
     async headers() {
+        if (process.env.NODE_ENV === 'development') {
+            return [
+                {
+                    source: '/(.*)',
+                    headers: [
+                        {
+                            key: 'Access-Control-Allow-Origin',
+                            value: '*',
+                        },
+                        {
+                            key: 'Access-Control-Allow-Methods',
+                            value: 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+                        },
+                        {
+                            key: 'Access-Control-Allow-Headers',
+                            value: 'Content-Type, Authorization, X-Requested-With, X-CSRF-TOKEN',
+                        },
+                    ],
+                },
+            ];
+        }
         return [];
     },
 
-    eslint: { ignoreDuringBuilds: true },
-    typescript: { ignoreBuildErrors: true },
+    eslint: {
+        // 本番ビルドでは ESLint による失敗を無視（CI で実施推奨）
+        ignoreDuringBuilds: true,
+    },
+    typescript: {
+        // 型エラーでビルドを止めない（CI でチェック推奨）
+        ignoreBuildErrors: true,
+    },
 
+    // 開発環境での最適化
     experimental: {
+        // 開発環境での高速リロード
         turbo: {
             rules: {
-                '*.svg': { loaders: ['@svgr/webpack'], as: '*.js' },
+                '*.svg': {
+                    loaders: ['@svgr/webpack'],
+                    as: '*.js',
+                },
             },
         },
     },
