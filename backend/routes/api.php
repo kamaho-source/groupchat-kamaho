@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
+// ルート側では EnsureFrontendRequestsAreStateful を使いません
 use Laravel\Fortify\Http\Controllers\AuthenticatedSessionController;
 use Laravel\Fortify\Http\Controllers\RegisteredUserController;
 
@@ -21,6 +21,11 @@ use App\Http\Controllers\AdminStatsController;
 |--------------------------------------------------------------------------
 | 認証前 API エンドポイント（CSRF検証なし）
 |--------------------------------------------------------------------------
+|
+| ※ Fortify のセッションログインを「web」ミドルウェアで処理する場合は
+|   /login /register を routes/web.php 側に移す運用が推奨です。
+|   ここではご要望どおり api.php を最小修正のみとし、既存ルートを維持します。
+|
 */
 Route::post('login', [AuthenticatedSessionController::class, 'store']);
 Route::post('register', [RegisteredUserController::class, 'store']);
@@ -30,16 +35,21 @@ Route::post('users', [UserController::class, 'store']); // 認証不要での新
 |--------------------------------------------------------------------------
 | 認証後 API エンドポイント
 |--------------------------------------------------------------------------
+|
+| ルート側では EnsureFrontendRequestsAreStateful を重ねません。
+| stateful 判定は Kernel の 'api' グループで実施され、ここでは
+| auth:sanctum（＋必要なら独自ミドルウェア）のみを適用します。
+|
 */
 Route::middleware([
-    EnsureFrontendRequestsAreStateful::class,
     'auth:sanctum',
     'check.user.active',
 ])->group(function () {
+
     // ログアウト
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('api.logout');
 
-    // 認証済みユーザー情報取得（クロージャ→コントローラへ置換）
+    // 認証済みユーザー情報取得
     Route::get('user', [AuthUserController::class, 'show']);
 
     // ユーザー一覧取得（アイコン情報含む）
@@ -61,6 +71,7 @@ Route::middleware([
     Route::get('admin/channel-activity', [AdminStatsController::class, 'channelActivity']);
     // 運用率（日次%）
     Route::get('admin/utilization', [AdminStatsController::class, 'utilization']);
+
     // プライバシー設定（管理者/マネージャー）
     Route::get('channels/{channel}/members', [ChannelPrivacyController::class, 'members']);
     Route::put('channels/{channel}/privacy', [ChannelPrivacyController::class, 'updatePrivacy']);
@@ -71,7 +82,7 @@ Route::middleware([
         ->middleware(\App\Http\Middleware\EnsureChannelViewable::class);
     Route::apiResource('channels', ChannelController::class);
 
-    // メッセージAPIは閲覧可��性を検証
+    // メッセージAPIは閲覧可能性を検証
     Route::get('channels/{channel}/messages', [MessageController::class, 'index'])
         ->middleware(\App\Http\Middleware\EnsureChannelViewable::class);
     Route::post('channels/{channel}/messages', [MessageController::class, 'store'])
@@ -81,28 +92,26 @@ Route::middleware([
     Route::put('channels/{channel}/messages/{message}', [MessageController::class, 'update'])
         ->middleware(\App\Http\Middleware\EnsureChannelViewable::class);
 
-    Route::get('projects',         [ProjectController::class, 'index']);
-    // プロジェクト作成（POST） ← ここを追加！
-    Route::post('projects',         [ProjectController::class, 'store']);
-    // プロジェクト詳細（GET）
-    Route::get('projects/{project}', [ProjectController::class, 'show']);
-    // プロジェクト更新（PATCH）
-    Route::patch('projects/{project}', [ProjectController::class, 'update']);
-    // プロジェクト削除（DELETE）
-    Route::delete('projects/{project}', [ProjectController::class, 'destroy']);
-    Route::get('/projects/{project}/users',             [ProjectUserController::class,'index']);
-    Route::post('/projects/{project}/users',             [ProjectUserController::class,'store']);
-    Route::put('/projects/{project}/users/{user}',       [ProjectUserController::class,'update']);
-    Route::delete('/projects/{project}/users/{user}',      [ProjectUserController::class,'destroy']);
-    Route::get('/projects/{project}/files',            [ProjectFileController::class,'index']);
-    Route::post('/projects/{project}/files',            [ProjectFileController::class,'store']);
-    Route::delete('/projects/{project}/files/{file}',     [ProjectFileController::class,'destroy']);
+    // プロジェクト
+    Route::get('projects', [ProjectController::class, 'index']);
+    Route::post('projects', [ProjectController::class, 'store']);                // 作成
+    Route::get('projects/{project}', [ProjectController::class, 'show']);        // 詳細
+    Route::patch('projects/{project}', [ProjectController::class, 'update']);    // 更新
+    Route::delete('projects/{project}', [ProjectController::class, 'destroy']);  // 削除
+
+    Route::get('/projects/{project}/users', [ProjectUserController::class, 'index']);
+    Route::post('/projects/{project}/users', [ProjectUserController::class, 'store']);
+    Route::put('/projects/{project}/users/{user}', [ProjectUserController::class, 'update']);
+    Route::delete('/projects/{project}/users/{user}', [ProjectUserController::class, 'destroy']);
+
+    Route::get('/projects/{project}/files', [ProjectFileController::class, 'index']);
+    Route::post('/projects/{project}/files', [ProjectFileController::class, 'store']);
+    Route::delete('/projects/{project}/files/{file}', [ProjectFileController::class, 'destroy']);
 
     // タスク
     Route::apiResource('projects.tasks', TaskController::class);
 
     // プロジェクトチャット
-    Route::get ('/projects/{project}/chat',      [ProjectChatController::class,'show']);
-    Route::post('/projects/{project}/chat/send', [ProjectChatController::class,'send']);
-
+    Route::get('/projects/{project}/chat', [ProjectChatController::class, 'show']);
+    Route::post('/projects/{project}/chat/send', [ProjectChatController::class, 'send']);
 });
