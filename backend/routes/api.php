@@ -34,6 +34,7 @@ Route::post('users', [UserController::class, 'store']); // 認証不要での新
 Route::middleware([
     EnsureFrontendRequestsAreStateful::class,
     'auth:sanctum',
+    'check.user.active',
 ])->group(function () {
     // ログアウト
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('api.logout');
