@@ -16,6 +16,7 @@ use App\Http\Controllers\ProjectFileController;
 use App\Http\Controllers\ProjectChatController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\AdminStatsController;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
 /*
 |--------------------------------------------------------------------------
@@ -42,6 +43,7 @@ Route::post('users', [UserController::class, 'store']); // 認証不要での新
 |
 */
 Route::middleware([
+    EnsureFrontendRequestsAreStateful::class,
     'auth:sanctum',
     'check.user.active',
 ])->group(function () {
