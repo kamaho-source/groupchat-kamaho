@@ -11,6 +11,67 @@ use Illuminate\Support\Facades\DB;
 
 class MessageController extends Controller
 {
+    private function isAiMentioned(string $content): bool
+    {
+        return (bool) preg_match('/(^|[\\s,、。!！?？:：;；()（）\\[\\]{}\"\\\'`])[@＠]AI(?![\\w-])/iu', $content);
+    }
+
+    private function buildAiPrompt(string $content): ?string
+    {
+        if (!$this->isAiMentioned($content)) {
+            return null;
+        }
+        $clean = preg_replace('/[@＠]AI/iu', '', $content);
+        $prompt = trim($clean ?? '');
+        return $prompt !== '' ? $prompt : '挨拶してください。';
+    }
+
+    private function callOpenRouter(string $prompt, ?string $userName = null): ?string
+    {
+        $apiKey = env('OPENROUTER_API_KEY');
+        if (!$apiKey) {
+            return null;
+        }
+
+        $system = env(
+            'OPENROUTER_SYSTEM_PROMPT',
+            'あなたは鎌倉児童ホームのチャットAIアシスタントです。日本語で簡潔に答えてください。'
+        );
+
+        $baseUri = env('OPENROUTER_API_BASE', 'openrouter.ai/api/v1');
+        $siteUrl = env('OPENROUTER_SITE_URL', env('APP_URL'));
+        $siteTitle = env('OPENROUTER_SITE_TITLE', 'Kamaho Chat');
+        $model = env('OPENROUTER_MODEL', 'openai/gpt-4o-mini');
+
+        $client = \OpenAI::factory()
+            ->withApiKey($apiKey)
+            ->withBaseUri($baseUri)
+            ->withHttpHeader('HTTP-Referer', (string) $siteUrl)
+            ->withHttpHeader('X-Title', (string) $siteTitle)
+            ->make();
+
+        $messages = [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => $prompt],
+        ];
+        if ($userName) {
+            $messages[1]['name'] = $userName;
+        }
+
+        try {
+            $response = $client->chat()->create([
+                'model' => $model,
+                'messages' => $messages,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('OpenRouter request failed', ['error' => $e->getMessage()]);
+            return null;
+        }
+
+        $content = $response->choices[0]->message->content ?? null;
+        return is_string($content) && trim($content) !== '' ? trim($content) : null;
+    }
+
     private function canView(Request $request, int $channelId): bool
     {
         $user = $request->user();
@@ -81,6 +142,20 @@ class MessageController extends Controller
         }
 
         $message = Message::create($data);
+
+        // @AI メンションが含まれていれば AI 返信を自動投稿
+        $aiPrompt = $this->buildAiPrompt($validated['content']);
+        $senderName = $validated['user'] ?? null;
+        if ($aiPrompt && strcasecmp((string) $senderName, 'AI') !== 0) {
+            $aiText = $this->callOpenRouter($aiPrompt, $senderName);
+            if ($aiText) {
+                Message::create([
+                    'channel_id' => $channelId,
+                    'user' => 'AI',
+                    'content' => $aiText,
+                ]);
+            }
+        }
 
         return response()->json($message->fresh(), 201);
     }

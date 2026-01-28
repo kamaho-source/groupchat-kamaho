@@ -1,8 +1,13 @@
 // lib/axios.ts
 import axios from 'axios';
 
-// Next.js rewrites 経由で backend へ到達するため baseURL は空
-axios.defaults.baseURL = '';
+// ブラウザは相対パスでフロント経由、サーバー側は必要なら内部URLへ
+const publicBase = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_BACKEND_ORIGIN;
+const serverBase = process.env.BACKEND_ORIGIN;
+const baseURL = typeof window === 'undefined'
+    ? (serverBase ?? publicBase ?? '')
+    : (publicBase ?? '');
+axios.defaults.baseURL = baseURL;
 axios.defaults.withCredentials = true;
 axios.defaults.xsrfCookieName = 'XSRF-TOKEN';
 axios.defaults.xsrfHeaderName = 'X-XSRF-TOKEN';

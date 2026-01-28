@@ -3,11 +3,10 @@ import { NextConfig } from 'next';
 // 開発環境ではlocalhost、本番環境ではコンテナ名を使用
 // 追加: 環境変数 BACKEND_ORIGIN/NEXT_PUBLIC_BACKEND_ORIGIN があればそれを優先
 const ENV_BACKEND = process.env.BACKEND_ORIGIN || process.env.NEXT_PUBLIC_BACKEND_ORIGIN;
-// next.config.ts 抜粋（任意）
-const HOST = process.env.BACKEND_ORIGIN
+const HOST = ENV_BACKEND
     ?? (process.env.NODE_ENV === 'production'
-        ? 'http://groupchat-kamaho-app:8000'
-        : 'http://192.168.24.200:8000'); // ← ここだけ差し替え
+        ? 'http://groupchat-kamaho-app'
+        : 'http://localhost:8000');
 
 
 const nextConfig: NextConfig = {

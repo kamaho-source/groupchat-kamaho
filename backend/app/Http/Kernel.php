@@ -2,6 +2,7 @@
 
 namespace App\Http;
 
+use App\Http\Middleware\CorsMiddleware;
 use Illuminate\Foundation\Http\Kernel as HttpKernel;
 
 // SPA 認証用
@@ -45,7 +46,7 @@ class Kernel extends HttpKernel
 
         'api' => [
             // 1) CORS 処理（最初に実行）
-            \App\Http\Middleware\CorsMiddleware::class,
+           CorsMiddleware::class,
 
             // 2) SPA 認証（Sanctum）のため
             EnsureFrontendRequestsAreStateful::class,
@@ -53,19 +54,7 @@ class Kernel extends HttpKernel
             // 3) API スロットリング
             'throttle:api',
 
-            // 4) Cookie の復号
-            EncryptCookies::class,
-
-            // 5) クッキーをレスポンスに反映
-            AddQueuedCookiesToResponse::class,
-
-            // 6) セッション開始・保存
-            StartSession::class,
-
-            // 7) CSRF 保護（必要に応じて）
-            VerifyCsrfToken::class,
-
-            // 8) ルートモデルバインディング
+            // 4) ルートモデルバインディング
             SubstituteBindings::class,
         ],
     ];
