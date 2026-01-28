@@ -12,6 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Cloudflare Tunnel などのリバースプロキシ経由で HTTPS を正しく認識させる
+        $middleware->trustProxies(at: '*');
+
         $middleware->statefulApi();
 
         // Sanctumのセッション認証を有効化
