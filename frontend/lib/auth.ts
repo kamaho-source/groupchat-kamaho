@@ -61,7 +61,11 @@ export const useAuth = () => {
         return { success: true, user: response.data.user };
       }
     } catch (error: any) {
-      const message = error.response?.data?.message || 'ログインに失敗しました';
+      const data = error.response?.data;
+      const fieldError =
+        data?.errors?.user_id?.[0] ||
+        data?.errors?.password?.[0];
+      const message = fieldError || data?.message || 'ログインに失敗しました';
       return { success: false, message };
     }
   };

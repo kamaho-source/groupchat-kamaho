@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use App\Actions\Fortify\LoginResponse;
+use Illuminate\Validation\ValidationException;
 
 class FortifyServiceProvider extends ServiceProvider
 {
@@ -33,20 +34,32 @@ class FortifyServiceProvider extends ServiceProvider
 
         // カスタム認証ロジック
         Fortify::authenticateUsing(function (Request $request) {
+            $request->validate(
+                [
+                    'user_id' => ['required', 'string'],
+                    'password' => ['required', 'string'],
+                ],
+                [
+                    'user_id.required' => 'ユーザーIDを入力してください。',
+                    'password.required' => 'パスワードを入力してください。',
+                ]
+            );
+
             $user = \App\Models\User::where('user_id', $request->input(Fortify::username()))->first();
 
-            if ($user && Hash::check($request->input('password'), $user->password)) {
-                // is_activeが0の場合、アカウント停止エラーをスロー
-                if (!$user->is_active) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
-                        'user_id' => ['アカウント停止状態なのでログインできません。管理者にお問い合わせください。'],
-                    ]);
-                }
-                return $user;
+            if (!$user || !Hash::check($request->input('password'), $user->password)) {
+                throw ValidationException::withMessages([
+                    'user_id' => ['パスワードかユーザ名が間違っています。'],
+                ]);
             }
 
-            // 認証に失敗した場合は null を返し、Fortify のパイプライン側でエラー処理させる
-            return null;
+            // is_activeが0の場合、アカウント停止エラーをスロー
+            if (!$user->is_active) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'user_id' => ['アカウント停止状態なのでログインできません。管理者にお問い合わせください。'],
+                ]);
+            }
+            return $user;
         });
 
         // ユーザー登録ロジックを指定
