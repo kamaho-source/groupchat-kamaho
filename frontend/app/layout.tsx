@@ -1,13 +1,10 @@
 // app/layout.tsx
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
 import Providers from './providers';
-
-const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
     title: '鎌倉児童ホームチャットアプリ',
@@ -26,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
     return (
         <html lang="ja">
-        <body className={inter.className}>
+        <body>
         <AppRouterCacheProvider options={{ key: 'mui' }}>
             <Providers>{children}</Providers>
         </AppRouterCacheProvider>

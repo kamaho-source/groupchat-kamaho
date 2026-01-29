@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Middleware\HandleCors;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -14,6 +15,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         // Cloudflare Tunnel などのリバースプロキシ経由で HTTPS を正しく認識させる
         $middleware->trustProxies(at: '*');
+
+        // CORS ヘッダーを必ず付与する（できるだけ早く実行）
+        $middleware->prepend(HandleCors::class);
 
         $middleware->statefulApi();
 
