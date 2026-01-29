@@ -41,6 +41,11 @@ const nextConfig: NextConfig = {
                 source: '/api/user',
                 destination: `${HOST}/api/user`,
             },
+            // /api/api/* を /api/* に丸める（本番の二重パス対策）
+            {
+                source: '/api/api/:path*',
+                destination: `${HOST}/api/:path*`,
+            },
             // Broadcasting 認証（PresenceChannel / PrivateChannel 用）
             {
                 source: '/broadcasting/auth',
