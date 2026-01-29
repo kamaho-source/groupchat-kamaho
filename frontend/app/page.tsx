@@ -734,7 +734,7 @@ export default function HomePage() {
         if (!ok) return;
 
         try {
-            await axios.delete(`/api/channels/${currentChannel}`);
+            await axios.delete(`/channels/${currentChannel}`);
             setToast({ open: true, msg: `チャン��ル「${name}」を削除しました。`, sev: 'success' });
 
             // リスト更新 & 選択チャンネル切替
@@ -763,7 +763,7 @@ export default function HomePage() {
     const ensureUsersLoaded = useCallback(async () => {
         if (allUsers.length > 0) return;
         try {
-            const ures = await axios.get('/api/users', { params: { _: Date.now() } });
+            const ures = await axios.get('/users', { params: { _: Date.now() } });
             const list = (ures.data as any[]).map(u => ({ id: Number(u.id), name: String(u.name) }));
             setAllUsers(list);
         } catch {
@@ -860,7 +860,7 @@ export default function HomePage() {
     const refreshAuth = useCallback(async () => {
         try {
             // キャッシュ回避のためにパラメータを付与
-            const res = await axios.get('/api/user', { params: { _: Date.now() } });
+            const res = await axios.get('/user', { params: { _: Date.now() } });
             setCurrentUser(res.data?.name ?? null);
             setCurrentUserId(Number(res.data?.id) || null);
             // 管理者/��ネージャー判定（APIの形に応じて調整）
@@ -1020,7 +1020,7 @@ export default function HomePage() {
     // API: fetch channels
     const fetchChannels = async () => {
         try {
-            const res = await axios.get('/api/channels');
+            const res = await axios.get('/channels');
             // Normalize posting_restricted to boolean to ensure UI can read it
             const list = Array.isArray(res.data) ? res.data : [];
             setChannels(list.map((c: any) => ({ ...(c || {}), posting_restricted: Boolean(c?.posting_restricted) })));
@@ -1032,7 +1032,7 @@ export default function HomePage() {
     // API: fetch messages
     const fetchMessages = async (channelId: number) => {
         try {
-            const res = await axios.get(`/api/channels/${channelId}/messages`);
+            const res = await axios.get(`/channels/${channelId}/messages`);
             const data = res.data as Message[];
             setMessages((prev) => {
                 // 長さと末尾IDだけでは「編集による内容変更」を検出できないため、簡易的に各要素を比較
@@ -1065,7 +1065,7 @@ export default function HomePage() {
         if (!currentUser) return;
         (async () => {
             try {
-                const res = await axios.get('/api/users');
+                const res = await axios.get('/users');
                 const map: Record<string, { avatar_url?: string | null; avatar_path?: string | null; icon_path?: string | null; icon_name?: string | null }> = {};
                 for (const u of res.data as Array<{ name: string; user_id?: string | null; avatar_url?: string | null; avatar_path?: string | null; icon_path?: string | null; icon_name?: string | null }>) {
                     const profile = {
@@ -1110,11 +1110,11 @@ export default function HomePage() {
             try {
                 // allUsers が未ロードなら取得
                 if (allUsers.length === 0) {
-                    const ures = await axios.get('/api/users');
+                    const ures = await axios.get('/users');
                     const list = (ures.data as any[]).map(u => ({ id: Number(u.id), name: u.name }));
                     setAllUsers(list);
                 }
-                const res = await axios.get(`/api/channels/${currentChannel}/members`);
+                const res = await axios.get(`/channels/${currentChannel}/members`);
                 setCurrentChannelMemberIds((res.data?.member_ids || []).map((n: any) => Number(n)));
             } catch {
                 // 失敗時は空にしておく
@@ -1149,7 +1149,7 @@ export default function HomePage() {
             }
 
             // Content-Type は axios に任せて境界線を自動付与
-            await axios.post(`/api/channels/${currentChannel}/messages`, formData);
+            await axios.post(`/channels/${currentChannel}/messages`, formData);
 
             setNewMessage('');
             setFile(null);
@@ -1216,7 +1216,7 @@ export default function HomePage() {
         const name = window.prompt('新しいチャンネル名を入力してください');
         if (!name) return;
         try {
-            const res = await axios.post('/api/channels', { name });
+            const res = await axios.post('/channels', { name });
             setChannels((prev) => [...prev, res.data]);
             setCurrentChannel(res.data.id);
             setToast({ open: true, msg: `チャンネル「${name}」を作成しました。`, sev: 'success' });
@@ -1228,7 +1228,7 @@ export default function HomePage() {
     // ログアウト
     const handleLogout = async () => {
         try {
-            await axios.post('/api/logout');
+            await axios.post('/logout');
         } finally {
             router.replace('/login');
         }
@@ -1253,7 +1253,7 @@ export default function HomePage() {
 
         try {
             // 2) API 呼び出し
-            const res = await axios.put(`/api/channels/${currentChannel}/messages/${targetId}`, { content: nextContent });
+            const res = await axios.put(`/channels/${currentChannel}/messages/${targetId}`, { content: nextContent });
             const updated = res.data;
 
             // 3) 応答内容で確定反映（サーバ側で更新さ���たメタも適用）
@@ -1280,13 +1280,13 @@ export default function HomePage() {
     const openPrivacyDialog = async () => {
         try {
             setPrivacyOpen(true);
-            const res = await axios.get(`/api/channels/${currentChannel}/members`);
+            const res = await axios.get(`/channels/${currentChannel}/members`);
             setPrivacyIsPrivate(Boolean(res.data?.is_private));
             // posting_restricted は members エンドポイントが返す場合とチャンネル情報から取得する場合がある
             setPrivacyPostingRestricted(Boolean(res.data?.posting_restricted || channels.find(c => c.id === currentChannel)?.posting_restricted));
             setPrivacyMemberIds((res.data?.member_ids || []).map((n: any) => Number(n)));
             if (allUsers.length === 0) {
-                const ures = await axios.get('/api/users');
+                const ures = await axios.get('/users');
                 const list = (ures.data as any[]).map(u => ({ id: Number(u.id), name: u.name }));
                 setAllUsers(list);
             }
@@ -1314,7 +1314,7 @@ export default function HomePage() {
         setAdminPwConfirm('');
         setAdminPwLoading(true);
         try {
-            const res = await axios.get('/api/users', { params: { _: Date.now() } });
+            const res = await axios.get('/users', { params: { _: Date.now() } });
             const list = (res.data as any[])
                 .map(u => ({
                     id: Number(u.id),
@@ -1346,7 +1346,7 @@ export default function HomePage() {
         }
         setAdminPwSubmitting(true);
         try {
-            await axios.put(`/api/users/${adminPwTargetId}/password`, {
+            await axios.put(`/users/${adminPwTargetId}/password`, {
                 new_password: adminPw,
                 new_password_confirmation: adminPwConfirm,
             });
@@ -1389,9 +1389,9 @@ export default function HomePage() {
         }
 
         try {
-            const created = await axios.post('/api/channels', { name: dmName });
+            const created = await axios.post('/channels', { name: dmName });
             const newCh = created.data;
-            await axios.put(`/api/channels/${newCh.id}/privacy`, {
+            await axios.put(`/channels/${newCh.id}/privacy`, {
                 is_private: true,
                 member_ids: [a, b],
             });
@@ -1416,7 +1416,7 @@ export default function HomePage() {
         (async () => {
             setDmLoading(true);
             try {
-                const ures = await axios.get('/api/users', { params: { _: Date.now() } });
+                const ures = await axios.get('/users', { params: { _: Date.now() } });
                 const list = (ures.data as any[]).map(u => ({ id: Number(u.id), name: String(u.name) }));
                 if (mounted) setAllUsers(list);
             } catch {
@@ -1886,7 +1886,7 @@ export default function HomePage() {
                         onClick={async () => {
                             setPrivacySaving(true);
                             try {
-                                await axios.put(`/api/channels/${currentChannel}/privacy`, {
+                                await axios.put(`/channels/${currentChannel}/privacy`, {
                                     is_private: privacyIsPrivate,
                                     member_ids: privacyIsPrivate ? privacyMemberIds : [],
                                     posting_restricted: privacyPostingRestricted,

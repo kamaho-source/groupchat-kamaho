@@ -20,7 +20,7 @@ export default function ChatPage() {
     const bottom = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
-        axios.get(`/api/projects/${projectId}/chat`).then(res => setMsgs(res.data))
+        axios.get(`/projects/${projectId}/chat`).then(res => setMsgs(res.data))
 
         ;(window as any).Pusher = Pusher
         const echo = new Echo({
@@ -42,7 +42,7 @@ export default function ChatPage() {
 
     const send = async () => {
         if (!body.trim()) return
-        await axios.post(`/api/projects/${projectId}/chat/send`, { body })
+        await axios.post(`/projects/${projectId}/chat/send`, { body })
         setBody('')
     }
 

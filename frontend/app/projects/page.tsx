@@ -17,7 +17,7 @@ export default function ProjectsPage() {
 
     const fetchProjects = async () => {
         try {
-            const res = await axios.get('/api/projects');
+            const res = await axios.get('/projects');
             setProjects(res.data);
         } catch {
             setError('プロジェクト一覧の取得に失敗しました');

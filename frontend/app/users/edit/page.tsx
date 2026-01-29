@@ -126,7 +126,7 @@ export default function EditUserPage() {
                 // 現在ユーザー（ロール取得 & id未指定なら自分のidに）
                 let editId = targetId
                 try {
-                    const me = await axios.get<{ id: string; role?: Role }>('/api/user')
+                    const me = await axios.get<{ id: string; role?: Role }>('/user')
                     if (mounted) setCurrentUserRole((me.data?.role as Role) ?? null)
                     if (!editId) editId = me.data?.id || ''
                 } catch {
@@ -136,7 +136,7 @@ export default function EditUserPage() {
                 if (!editId) throw new Error('ユーザーIDが取得できませんでした')
 
                 // 編集対象ユーザー
-                const res = await axios.get<User>(`/api/users/${editId}`)
+                const res = await axios.get<User>(`/users/${editId}`)
                 if (!mounted) return
                 const u = res.data
                 setRecordId(u.id ?? '')
@@ -206,18 +206,18 @@ export default function EditUserPage() {
                     form.append('role', role)
                 }
                 form.append('avatar', iconFile)
-                await axios.post(`/api/users/${recordId}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
+                await axios.post(`/users/${recordId}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
             } else {
                 const payload: any = { name: fullName, icon_name: iconName || null }
                 if (canChangeRole) {
                     payload.role = role
                 }
-                await axios.put(`/api/users/${recordId}`, payload)
+                await axios.put(`/users/${recordId}`, payload)
             }
 
             // 2) パスワード変更（管理者・マネージャーのみ、入力がある時）
             if (willChangePassword) {
-                await axios.put(`/api/users/${recordId}/password`, {
+                await axios.put(`/users/${recordId}/password`, {
                     new_password: password,
                     new_password_confirmation: passwordConfirm,
                 })

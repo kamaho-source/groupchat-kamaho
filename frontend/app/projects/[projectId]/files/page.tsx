@@ -26,7 +26,7 @@ export default function FilesPage() {
 
     const fetchFiles = async () => {
         try {
-            const res = await axios.get(`/api/projects/${projectId}/files`)
+            const res = await axios.get(`/projects/${projectId}/files`)
             setFiles(res.data)
         } catch (err) {
             console.error(err)
@@ -43,7 +43,7 @@ export default function FilesPage() {
         try {
             const form = new FormData()
             form.append('file', file)
-            await axios.post(`/api/projects/${projectId}/files`, form, {
+            await axios.post(`/projects/${projectId}/files`, form, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             })
             await fetchFiles()
@@ -57,7 +57,7 @@ export default function FilesPage() {
     const handleDelete = async (id: number) => {
         try {
             if (!confirm('本当に削除しますか？')) return
-            await axios.delete(`/api/projects/${projectId}/files/${id}`)
+            await axios.delete(`/projects/${projectId}/files/${id}`)
             await fetchFiles()
         } catch (err) {
             console.error(err)

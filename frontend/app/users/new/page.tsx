@@ -67,7 +67,7 @@ export default function NewUserPage() {
     // 共通ナビゲーション: 未認証なら /login、認証済なら /
     const navigateAfterClose = async () => {
         try {
-            await axios.get('/api/user');
+            await axios.get('/user');
             router.push('/');
         } catch {
             router.push('/login');
@@ -144,10 +144,10 @@ export default function NewUserPage() {
                 form.append('password', password)
                 form.append('avatar', iconFile) // バックエンドで受け取るキー名は適宜変更
 
-                await axios.post('/api/users', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+                await axios.post('/users', form, { headers: { 'Content-Type': 'multipart/form-data' } })
             } else {
                 // ファイルなし: JSON + icon_name
-                await axios.post('/api/users', {
+                await axios.post('/users', {
                     user_id: userId,
                     name: fullName,
                     role,
