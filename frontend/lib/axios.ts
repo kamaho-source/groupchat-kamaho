@@ -4,9 +4,11 @@ import axios from 'axios';
 // ブラウザは相対パスでフロント経由、サーバー側は必要なら内部URLへ
 const publicBase = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_BACKEND_ORIGIN;
 const serverBase = process.env.BACKEND_ORIGIN;
+const normalizedPublic = publicBase?.replace(/\/$/, '') ?? '';
+const browserBase = normalizedPublic === '/api' ? '' : normalizedPublic;
 const baseURL = typeof window === 'undefined'
-    ? (serverBase ?? publicBase ?? '')
-    : (publicBase ?? '');
+    ? (serverBase ?? normalizedPublic ?? '')
+    : (browserBase ?? '');
 axios.defaults.baseURL = baseURL;
 axios.defaults.withCredentials = true;
 axios.defaults.xsrfCookieName = 'XSRF-TOKEN';
