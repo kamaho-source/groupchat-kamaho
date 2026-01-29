@@ -34,7 +34,7 @@ export default function ManagerDashboardPage() {
         let mounted = true;
         (async () => {
             try {
-                const res = await axios.get('/api/user', { params: { _: Date.now() } });
+                const res = await axios.get('/user', { params: { _: Date.now() } });
                 const data = res.data || {};
                 const isAdmin =
                     !!data?.is_admin ||
@@ -66,7 +66,7 @@ export default function ManagerDashboardPage() {
         (async () => {
             setChannelsLoading(true);
             try {
-                const cres = await axios.get('/api/channels', { params: { _: Date.now() } });
+                const cres = await axios.get('/channels', { params: { _: Date.now() } });
                 const list = Array.isArray(cres.data) ? cres.data : [];
                 if (mounted) setChannels(list);
             } catch {
@@ -83,7 +83,7 @@ export default function ManagerDashboardPage() {
         // 運用状況データを取得
         (async () => {
             try {
-                const res = await axios.get('/api/manager/operation-stats');
+                const res = await axios.get('/manager/operation-stats');
                 setOperationStats(res.data);
             } catch (error) {
                 console.error('Failed to fetch operation stats:', error);
@@ -95,7 +95,7 @@ export default function ManagerDashboardPage() {
         let mounted = true;
         (async () => {
             try {
-                const res = await axios.get('/api/admin/channel-activity');
+                const res = await axios.get('/admin/channel-activity');
                 if (mounted) {
                     setActivityData(res.data);
                 }
@@ -113,7 +113,7 @@ export default function ManagerDashboardPage() {
     };
     const saveRename = async (ch: { id: number; name: string }) => {
         try {
-            const res = await axios.put(`/api/channels/${ch.id}`, { name: editingChannelName });
+            const res = await axios.put(`/channels/${ch.id}`, { name: editingChannelName });
             setChannels((prev) => prev.map((c) => (c.id === ch.id ? { ...c, name: res.data.name ?? editingChannelName } : c)));
             setEditingChannelId(null);
             setEditingChannelName('');
@@ -125,7 +125,7 @@ export default function ManagerDashboardPage() {
     const togglePrivate = async (ch: { id: number; name: string; is_private?: boolean }) => {
         try {
             const nextPrivate = !ch.is_private;
-            await axios.put(`/api/channels/${ch.id}/privacy`, {
+            await axios.put(`/channels/${ch.id}/privacy`, {
                 is_private: nextPrivate,
                 member_ids: [],
             });
@@ -140,7 +140,7 @@ export default function ManagerDashboardPage() {
     const togglePostingRestricted = async (ch: { id: number; name: string; posting_restricted?: boolean; is_private?: boolean }) => {
         try {
             const next = !ch.posting_restricted;
-            await axios.put(`/api/channels/${ch.id}/privacy`, {
+            await axios.put(`/channels/${ch.id}/privacy`, {
                 is_private: ch.is_private || false,
                 member_ids: [],
                 posting_restricted: next,
@@ -157,11 +157,11 @@ export default function ManagerDashboardPage() {
         setMembersChannelId(ch.id);
         setMembersLoading(true);
         try {
-            const res = await axios.get(`/api/channels/${ch.id}/members`);
+            const res = await axios.get(`/channels/${ch.id}/members`);
             const ids: number[] = (res.data?.member_ids || []).map((n: any) => Number(n));
             setMembersIds(ids);
             // ユーザー一覧も取得
-            const ures = await axios.get('/api/users');
+            const ures = await axios.get('/users');
             const ulist = Array.isArray(ures.data) ? ures.data : [];
             setUsers(ulist.map((u: any) => ({ id: Number(u.id), name: String(u.name) })));
         } catch {
@@ -175,7 +175,7 @@ export default function ManagerDashboardPage() {
     const saveMembers = async () => {
         if (!membersChannelId) return;
         try {
-            await axios.put(`/api/channels/${membersChannelId}/privacy`, {
+            await axios.put(`/channels/${membersChannelId}/privacy`, {
                 is_private: true,
                 member_ids: membersIds,
             });

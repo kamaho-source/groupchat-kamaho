@@ -17,7 +17,7 @@ export default function ProjectUsers() {
     useEffect(() => {
         // 全ユーザー取得
         axios
-            .get('/api/users')
+            .get('/users')
             .then(res => {
                 const raw = res.data.data ?? res.data;
                 let data: User[] = [];
@@ -40,7 +40,7 @@ export default function ProjectUsers() {
 
         // プロジェクト既存メンバー取得
         axios
-            .get(`/api/projects/${projectId}/users`)
+            .get(`/projects/${projectId}/users`)
             .then(res => {
                 const raw = res.data.data ?? res.data;
                 let members: { id: number }[] = [];
@@ -63,7 +63,7 @@ export default function ProjectUsers() {
 
     const submit = async () => {
         try {
-            await axios.post(`/api/projects/${projectId}/users`, {
+            await axios.post(`/projects/${projectId}/users`, {
                 user_ids: selected,
                 role,
                 is_public: isPublic,

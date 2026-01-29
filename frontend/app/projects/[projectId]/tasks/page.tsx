@@ -34,7 +34,7 @@ export default function TasksPage() {
 
     const fetchTasks = async () => {
         try {
-            const res = await axios.get(`/api/projects/${projectId}/tasks`)
+            const res = await axios.get(`/projects/${projectId}/tasks`)
             setTasks(res.data)
         } catch (err) {
             console.error(err)
@@ -43,7 +43,7 @@ export default function TasksPage() {
 
     const fetchUsers = async () => {
         try {
-            const res = await axios.get(`/api/projects/${projectId}/users`)
+            const res = await axios.get(`/projects/${projectId}/users`)
             setUsers(res.data)
         } catch (err) {
             console.error(err)
@@ -55,7 +55,7 @@ export default function TasksPage() {
         if (!title.trim()) return
         setLoading(true)
         try {
-            await axios.post(`/api/projects/${projectId}/tasks`, {
+            await axios.post(`/projects/${projectId}/tasks`, {
                 title,
                 description,
                 start_at: startAt || null,
@@ -76,7 +76,7 @@ export default function TasksPage() {
 
     const handleUpdateStatus = async (id: number, newStatus: Task['status']) => {
         try {
-            await axios.patch(`/api/projects/${projectId}/tasks/${id}`, { status: newStatus })
+            await axios.patch(`/projects/${projectId}/tasks/${id}`, { status: newStatus })
             await fetchTasks()
         } catch (err) {
             console.error(err)

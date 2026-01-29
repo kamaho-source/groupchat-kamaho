@@ -86,7 +86,7 @@ export default function AdminDashboardPage() {
         let mounted = true;
         (async () => {
             try {
-                const res = await axios.get('/api/user', { params: { _: Date.now() } });
+                const res = await axios.get('/user', { params: { _: Date.now() } });
                 const data = res.data || {};
                 const isAdmin =
                     !!data?.is_admin ||
@@ -114,7 +114,7 @@ export default function AdminDashboardPage() {
         (async () => {
             setLoadingUsers(true);
             try {
-                const res = await axios.get('/api/users', { params: { _: Date.now() } });
+                const res = await axios.get('/users', { params: { _: Date.now() } });
                 const list = Array.isArray(res.data) ? res.data : [];
                 const normalized = list.map((u: any) => {
                     const roles: string[] = [];
@@ -151,7 +151,7 @@ export default function AdminDashboardPage() {
             // 統計
             setStatsLoading(true);
             try {
-                const sres = await axios.get('/api/admin/stats', { params: { _: Date.now() } });
+                const sres = await axios.get('/admin/stats', { params: { _: Date.now() } });
                 if (mounted) setStats(sres.data);
             } catch {
                 if (mounted) setStats(null);
@@ -163,7 +163,7 @@ export default function AdminDashboardPage() {
             // チャンネル一覧
             setChannelsLoading(true);
             try {
-                const cres = await axios.get('/api/channels', { params: { _: Date.now() } });
+                const cres = await axios.get('/channels', { params: { _: Date.now() } });
                 const list: ChannelRow[] = Array.isArray(cres.data) ? cres.data : [];
                 if (mounted) setChannels(list);
             } catch {
@@ -180,7 +180,7 @@ export default function AdminDashboardPage() {
         if (!authorized) return;
         (async () => {
             try {
-                const res = await axios.get('/api/admin/channel-activity');
+                const res = await axios.get('/admin/channel-activity');
                 console.log('Fetched channel activity:', res.data); // デバッグ用ログ
                 setChannelActivity(res.data);
             } catch (error) {
@@ -188,7 +188,7 @@ export default function AdminDashboardPage() {
                 setToast({ open: true, msg: 'チャンネル稼働率の取得に失敗しました。', sev: 'error' });
             }
             try {
-                const ures = await axios.get('/api/admin/utilization');
+                const ures = await axios.get('/admin/utilization');
                 setUtilization(ures.data);
             } catch (error) {
                 console.error('Failed to fetch utilization:', error);
@@ -329,7 +329,7 @@ export default function AdminDashboardPage() {
         const name = window.prompt('新しいチャンネル名を入力してください');
         if (!name) return;
         try {
-            const res = await axios.post('/api/channels', { name });
+            const res = await axios.post('/channels', { name });
             setChannels((prev) => [...prev, res.data]);
             setToast({ open: true, msg: `チャンネル「${name}」を作成しました。`, sev: 'success' });
         } catch {
@@ -346,7 +346,7 @@ export default function AdminDashboardPage() {
     // 名称保存
     const saveRename = async (ch: ChannelRow) => {
         try {
-            const res = await axios.put(`/api/channels/${ch.id}`, { name: editingChannelName });
+            const res = await axios.put(`/channels/${ch.id}`, { name: editingChannelName });
             setChannels((prev) => prev.map((c) => (c.id === ch.id ? { ...c, name: res.data.name ?? editingChannelName } : c)));
             setEditingChannelId(null);
             setEditingChannelName('');
@@ -365,7 +365,7 @@ export default function AdminDashboardPage() {
         const ok = window.confirm(`チャンネル「${ch.name}」を削除します。よろしいですか？`);
         if (!ok) return;
         try {
-            await axios.delete(`/api/channels/${ch.id}`);
+            await axios.delete(`/channels/${ch.id}`);
             setChannels((prev) => prev.filter((c) => c.id !== ch.id));
             setToast({ open: true, msg: 'チャンネルを削除しました。', sev: 'success' });
         } catch {
@@ -377,7 +377,7 @@ export default function AdminDashboardPage() {
     const togglePrivate = async (ch: ChannelRow) => {
         try {
             const nextPrivate = !ch.is_private;
-            await axios.put(`/api/channels/${ch.id}/privacy`, {
+            await axios.put(`/channels/${ch.id}/privacy`, {
                 is_private: nextPrivate,
                 // 既存メンバー維持（未取得の場合は空: サーバ側で全員/誰も閲覧できないなど、実装に合わせて）
                 member_ids: [],
@@ -393,7 +393,7 @@ export default function AdminDashboardPage() {
     const togglePostingRestricted = async (ch: ChannelRow) => {
         try {
             const next = !ch.posting_restricted;
-            await axios.put(`/api/channels/${ch.id}/privacy`, {
+            await axios.put(`/channels/${ch.id}/privacy`, {
                 // 保守的に既存の is_private を維持（サーバ側で適切に処理）
                 is_private: ch.is_private || false,
                 member_ids: [],
@@ -412,7 +412,7 @@ export default function AdminDashboardPage() {
         setMembersChannelId(ch.id);
         setMembersLoading(true);
         try {
-            const res = await axios.get(`/api/channels/${ch.id}/members`);
+            const res = await axios.get(`/channels/${ch.id}/members`);
             const ids: number[] = (res.data?.member_ids || []).map((n: any) => Number(n));
             setMembersIds(ids);
         } catch {
@@ -427,7 +427,7 @@ export default function AdminDashboardPage() {
     const saveMembers = async () => {
         if (!membersChannelId) return;
         try {
-            await axios.put(`/api/channels/${membersChannelId}/privacy`, {
+            await axios.put(`/channels/${membersChannelId}/privacy`, {
                 is_private: true,
                 member_ids: membersIds,
             });
@@ -459,7 +459,7 @@ export default function AdminDashboardPage() {
             return n;
         });
         try {
-            await axios.put(`/api/users/${userId}`, { name: prevName, role: nextRole });
+            await axios.put(`/users/${userId}`, { name: prevName, role: nextRole });
             setToast({ open: true, msg: '権限を更新しました。', sev: 'success' });
         } catch {
             setToast({ open: true, msg: '権限の更新に失敗しました。', sev: 'error' });
@@ -475,7 +475,7 @@ export default function AdminDashboardPage() {
     const toggleActive = async (userId: number, isActive: boolean) => {
         setSavingIds((s) => { const n = new Set(s); n.add(userId); return n; });
         try {
-            await axios.put(`/api/users/${userId}`, { is_active: !isActive });
+            await axios.put(`/users/${userId}`, { is_active: !isActive });
             setUsers((list) => list.map((u) => u.id === userId ? { ...u, is_active: !isActive } : u));
             setToast({ open: true, msg: isActive ? 'アカウントを停止しました。' : 'アカウントを再開しました。', sev: 'success' });
         } catch {
@@ -489,7 +489,7 @@ export default function AdminDashboardPage() {
         if (!window.confirm('本当にこのユーザーを削除しますか？')) return;
         setSavingIds((s) => { const n = new Set(s); n.add(userId); return n; });
         try {
-            await axios.delete(`/api/users/${userId}`);
+            await axios.delete(`/users/${userId}`);
             setUsers((list) => list.filter((u) => u.id !== userId));
             setToast({ open: true, msg: 'ユーザーを削除しました。', sev: 'success' });
         } catch {

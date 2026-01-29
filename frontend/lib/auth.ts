@@ -26,7 +26,7 @@ export const useAuth = () => {
   // 認証状態の確認
   const checkAuth = async () => {
     try {
-      const response = await axios.get('/api/user');
+      const response = await axios.get('/user');
       setAuthState({
         user: response.data,
         authenticated: true,
@@ -44,10 +44,10 @@ export const useAuth = () => {
   // ログイン
   const login = async (user_id: string, password: string) => {
     try {
-      // CSRF Cookieを取得（Next.jsのリライト経由）
-      await axios.get('/sanctum/csrf-cookie');
+      // CSRF Cookieを取得（/api ではないため baseURL を無視）
+      await axios.get('/sanctum/csrf-cookie', { baseURL: '' });
       
-      const response = await axios.post('/api/login', {
+      const response = await axios.post('/login', {
         user_id,
         password,
       });
@@ -73,7 +73,7 @@ export const useAuth = () => {
   // ログアウト
   const logout = async () => {
     try {
-      await axios.post('/api/logout');
+      await axios.post('/logout');
       setAuthState({
         user: null,
         authenticated: false,

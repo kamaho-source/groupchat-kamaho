@@ -1,14 +1,13 @@
 // lib/axios.ts
 import axios from 'axios';
 
-// ブラウザは相対パスでフロント経由、サーバー側は必要なら内部URLへ
-const publicBase = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_BACKEND_ORIGIN;
+// baseURL は /api、呼び出し側は /users のように書く
+const publicBase = process.env.NEXT_PUBLIC_API_BASE || '/api';
 const serverBase = process.env.BACKEND_ORIGIN;
-const normalizedPublic = publicBase?.replace(/\/$/, '') ?? '';
-const browserBase = normalizedPublic === '/api' ? '' : normalizedPublic;
+const normalizedPublic = publicBase.replace(/\/$/, '');
 const baseURL = typeof window === 'undefined'
-    ? (serverBase ?? normalizedPublic ?? '')
-    : (browserBase ?? '');
+    ? (serverBase ? `${serverBase.replace(/\/$/, '')}${normalizedPublic}` : normalizedPublic)
+    : normalizedPublic;
 axios.defaults.baseURL = baseURL;
 axios.defaults.withCredentials = true;
 axios.defaults.xsrfCookieName = 'XSRF-TOKEN';

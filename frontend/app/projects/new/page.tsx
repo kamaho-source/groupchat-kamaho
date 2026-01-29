@@ -19,7 +19,7 @@ export default function NewProject() {
     // 既存チャンネル一覧を取得
     useEffect(() => {
         axios
-            .get('/api/channels')
+            .get('/channels')
             .then(res => setChannels(res.data))
             .catch(() => setError('チャンネルの取得に失敗しました'))
     }, [])
@@ -29,7 +29,7 @@ export default function NewProject() {
         setError(null)
         setLoading(true)
         try {
-            await axios.post('/api/projects', {
+            await axios.post('/projects', {
                 name,
                 description,
                 channel_id: channelId,
