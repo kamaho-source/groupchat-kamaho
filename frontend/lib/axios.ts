@@ -2,8 +2,14 @@
 import axios from 'axios';
 
 // baseURL は /api、呼び出し側は /users のように書く
+const normalizeOrigin = (origin?: string) => {
+    if (!origin) return undefined;
+    const trimmed = origin.replace(/\/$/, '');
+    // 誤って末尾に /api を含めた場合に二重化しないように補正
+    return trimmed.endsWith('/api') ? trimmed.slice(0, -4) : trimmed;
+};
 const publicBase = process.env.NEXT_PUBLIC_API_BASE || '/api';
-const serverBase = process.env.BACKEND_ORIGIN;
+const serverBase = normalizeOrigin(process.env.BACKEND_ORIGIN);
 const normalizedPublic = publicBase.replace(/\/$/, '');
 const baseURL = typeof window === 'undefined'
     ? (serverBase ? `${serverBase.replace(/\/$/, '')}${normalizedPublic}` : normalizedPublic)

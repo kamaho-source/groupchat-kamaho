@@ -2,7 +2,13 @@ import { NextConfig } from 'next';
 
 // 開発環境ではlocalhost、本番環境ではコンテナ名を使用
 // 追加: 環境変数 BACKEND_ORIGIN/NEXT_PUBLIC_BACKEND_ORIGIN があればそれを優先
-const ENV_BACKEND = process.env.BACKEND_ORIGIN || process.env.NEXT_PUBLIC_BACKEND_ORIGIN;
+const normalizeOrigin = (origin?: string) => {
+    if (!origin) return undefined;
+    const trimmed = origin.replace(/\/$/, '');
+    // 誤って末尾に /api を含めた場合に二重化しないように補正
+    return trimmed.endsWith('/api') ? trimmed.slice(0, -4) : trimmed;
+};
+const ENV_BACKEND = normalizeOrigin(process.env.BACKEND_ORIGIN || process.env.NEXT_PUBLIC_BACKEND_ORIGIN);
 const HOST = ENV_BACKEND
     ?? (process.env.NODE_ENV === 'production'
         ? 'http://groupchat-kamaho-app'
