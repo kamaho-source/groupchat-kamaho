@@ -15,7 +15,7 @@ class ChannelPrivacyController extends Controller
         $user = $request->user();
         if (!$user) abort(401);
 
-        $base = DB::table('channels')->select('id', 'name', 'is_private')->orderBy('name');
+        $base = DB::table('channels')->select('id', 'name', 'is_private', 'posting_restricted')->orderBy('name');
 
         $role = $user->role ?? null;
         if (!in_array($role, ['admin', 'manager'], true)) {
@@ -39,13 +39,14 @@ class ChannelPrivacyController extends Controller
         if (!$actor) abort(401);
         if (!in_array($actor->role ?? null, ['admin', 'manager'], true)) abort(403);
 
-        $ch = DB::table('channels')->where('id', $channelId)->first(['id', 'is_private']);
+        $ch = DB::table('channels')->where('id', $channelId)->first(['id', 'is_private', 'posting_restricted']);
         if (!$ch) abort(404);
 
         $memberIds = DB::table('channel_user')->where('channel_id', $channelId)->pluck('user_id')->all();
 
         return response()->json([
             'is_private' => (bool)$ch->is_private,
+            'posting_restricted' => (bool)($ch->posting_restricted ?? false),
             'member_ids' => array_map('intval', $memberIds),
         ]);
     }
@@ -62,6 +63,7 @@ class ChannelPrivacyController extends Controller
             'is_private'  => ['required', 'boolean'],
             'member_ids'  => ['array'],
             'member_ids.*'=> ['integer', 'exists:users,id'],
+            'posting_restricted' => ['sometimes', 'boolean'],
         ]);
 
         // 対象チャンネル取得（DM名判定用に name も取得）
@@ -95,7 +97,14 @@ class ChannelPrivacyController extends Controller
             }
         }
 
-        DB::table('channels')->where('id', $channelId)->update(['is_private' => $data['is_private'] ? 1 : 0]);
+        $update = ['is_private' => $data['is_private'] ? 1 : 0];
+        if ($roleAllowed && array_key_exists('posting_restricted', $data)) {
+            $update['posting_restricted'] = $data['posting_restricted'] ? 1 : 0;
+        }
+        if (!$roleAllowed && array_key_exists('posting_restricted', $data)) {
+            abort(403);
+        }
+        DB::table('channels')->where('id', $channelId)->update($update);
 
         // メンバー更新（公開に戻す場合は全削除）
         DB::table('channel_user')->where('channel_id', $channelId)->delete();

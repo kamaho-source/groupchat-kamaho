@@ -76,7 +76,7 @@ class AuthController extends Controller
 
         // 認証成功
         Auth::login($user, true);
-        $request->session()->regenerate();
+        //$request->session()->regenerate();
 
         return response()->json([
             'success' => true,

@@ -28,7 +28,7 @@ class Kernel extends HttpKernel
             // 2) Cookie の復号
             EncryptCookies::class,
 
-            // 3) クッキーをレスポンスに反映させる ← ここを追加
+            // 3) クッキーをレスポンスに反映
             AddQueuedCookiesToResponse::class,
 
             // 4) セッション開始・保存
@@ -46,7 +46,13 @@ class Kernel extends HttpKernel
 
         'api' => [
             // 1) CORS 処理（最初に実行）
-           CorsMiddleware::class,
+            CorsMiddleware::class,
+
+            // ★ ここから追加：Cookie/Session を api でも開始する
+            EncryptCookies::class,
+            AddQueuedCookiesToResponse::class,
+            StartSession::class,
+            // ★ ここまで追加
 
             // 2) SPA 認証（Sanctum）のため
             EnsureFrontendRequestsAreStateful::class,
