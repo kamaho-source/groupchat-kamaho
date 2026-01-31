@@ -13,6 +13,8 @@ use App\Http\Controllers\ProjectFileController;
 use App\Http\Controllers\ProjectChatController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\AdminStatsController;
+use Laravel\Fortify\Http\Controllers\AuthenticatedSessionController;
+use Laravel\Sanctum\Http\Controllers\CsrfCookieController;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,6 +26,19 @@ use App\Http\Controllers\AdminStatsController;
 | - ここ（api.php）は auth:sanctum を前提に API 本体だけを置く
 |
 */
+
+
+Route::middleware('web')->group(function () {
+
+    // CSRF Cookie（SPA 初期化時に必須）
+    Route::get('/sanctum/csrf-cookie', [CsrfCookieController::class, 'show']);
+
+    // ログイン（セッションを確実に保存）
+    Route::post('/login', [AuthenticatedSessionController::class, 'store']);
+
+    // ログアウト
+    Route::post('/logout', [AuthenticatedSessionController::class, 'destroy']);
+});
 
 /*
 |--------------------------------------------------------------------------
