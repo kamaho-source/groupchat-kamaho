@@ -11,8 +11,8 @@ use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
-    /**
-     * POST /api/register
+    /*
+     * POST /register
      */
     public function register(Request $request)
     {
