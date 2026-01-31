@@ -8,7 +8,7 @@ use Illuminate\Foundation\Http\Kernel as HttpKernel;
 // SPA 認証用
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
-// Cookie／セッション／CSRF まわり
+// Cookie／セッション／CSRF
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Session\Middleware\StartSession;
@@ -18,52 +18,48 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class Kernel extends HttpKernel
 {
-    // 省略...
-
     protected $middlewareGroups = [
+
+        /*
+        |--------------------------------------------------------------------------
+        | Web Middleware Group
+        |--------------------------------------------------------------------------
+        |
+        | セッション + CSRF + Cookie を使う通常の Web リクエスト
+        |
+        */
         'web' => [
-            // 1) CORS 処理（最初に実行）
-            \App\Http\Middleware\CorsMiddleware::class,
+            CorsMiddleware::class,
 
-            // 2) Cookie の復号
             EncryptCookies::class,
-
-            // 3) クッキーをレスポンスに反映
             AddQueuedCookiesToResponse::class,
 
-            // 4) セッション開始・保存
             StartSession::class,
-
-            // 5) セッションエラー共有
             ShareErrorsFromSession::class,
 
-            // 6) CSRF 保護
             VerifyCsrfToken::class,
 
-            // 7) ルートモデルバインディング
             SubstituteBindings::class,
         ],
 
+        /*
+        |--------------------------------------------------------------------------
+        | API Middleware Group（Sanctum SPA）
+        |--------------------------------------------------------------------------
+        |
+        | セッション開始は EnsureFrontendRequestsAreStateful に任せる
+        | StartSession を直接入れないのが重要
+        |
+        */
         'api' => [
-            // 1) CORS 処理（最初に実行）
             CorsMiddleware::class,
 
-            // ★ ここから追加：Cookie/Session を api でも開始する
-            EncryptCookies::class,
-            AddQueuedCookiesToResponse::class,
-            StartSession::class,
-            // ★ ここまで追加
-
-            // 2) SPA 認証（Sanctum）のため
+            // ★ Sanctum が Cookie / Session を制御する
             EnsureFrontendRequestsAreStateful::class,
 
-            // 3) API スロットリング
             'throttle:api',
 
-            // 4) ルートモデルバインディング
             SubstituteBindings::class,
         ],
     ];
-
-    // 省略...
 }
