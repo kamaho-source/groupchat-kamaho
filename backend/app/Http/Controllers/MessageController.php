@@ -92,6 +92,20 @@ class MessageController extends Controller
             ->exists();
     }
 
+    private function canPost(Request $request, int $channelId): bool
+    {
+        $user = $request->user();
+        if (!$user) {
+            return false;
+        }
+        $role = $user->role ?? null;
+        if (in_array($role, ['admin', 'manager'], true)) {
+            return true;
+        }
+        $restricted = (bool) DB::table('channels')->where('id', $channelId)->value('posting_restricted');
+        return !$restricted;
+    }
+
     public function index($channelId)
     {
         // ミドルウェアに加えて二重チェック（安全側）
@@ -108,6 +122,9 @@ class MessageController extends Controller
     {
         if (!$this->canView($request, (int)$channelId)) {
             return response()->json(['message' => 'あなたには閲覧権限がありません'], 403);
+        }
+        if (!$this->canPost($request, (int)$channelId)) {
+            return response()->json(['message' => 'このチャンネルは投稿が制限されています'], 403);
         }
 
         $validated = $request->validate([
@@ -164,6 +181,9 @@ class MessageController extends Controller
     {
         if (!$this->canView($request, (int)$channel->id)) {
             return response()->json(['message' => 'あなたには閲覧権限がありません'], 403);
+        }
+        if (!$this->canPost($request, (int)$channel->id)) {
+            return response()->json(['message' => 'このチャンネルは投稿が制限されています'], 403);
         }
 
         // チャンネル & ユーザーの権限チェックを入れても良い
